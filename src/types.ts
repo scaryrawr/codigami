@@ -27,9 +27,19 @@ export interface EmbeddingProvider {
 
 // --- Indexing ---
 
+export interface StoredEmbedding {
+  unitId: string;
+  embedding: number[];
+}
+
 export interface IndexStore {
   upsertUnits(units: CodeUnit[]): void;
-  storeEmbeddings(entries: { unitId: string; embedding: number[] }[]): void;
+  storeEmbeddings(entries: StoredEmbedding[]): void;
+  replaceFileUnitsWithEmbeddings(
+    filePaths: string[],
+    units: CodeUnit[],
+    entries: StoredEmbedding[],
+  ): void;
   getAllWithEmbeddings(): { unit: CodeUnit; embedding: number[] }[];
   deleteByFilePaths(filePaths: string[]): void;
   clear(): void;
@@ -84,10 +94,7 @@ export interface PipelineConfig {
 export class CodigamiError extends Error {
   readonly context?: Record<string, unknown>;
 
-  constructor(
-    message: string,
-    context?: Record<string, unknown>,
-  ) {
+  constructor(message: string, context?: Record<string, unknown>) {
     super(message);
     this.name = "CodigamiError";
     this.context = context;
@@ -96,11 +103,7 @@ export class CodigamiError extends Error {
 
 // --- Utilities ---
 
-export const makeUnitId = (
-  filePath: string,
-  startLine: number,
-  endLine: number,
-): string => {
+export const makeUnitId = (filePath: string, startLine: number, endLine: number): string => {
   const hash = createHash("sha256");
   hash.update(`${filePath}:${startLine}:${endLine}`);
   return hash.digest("hex").slice(0, 16);

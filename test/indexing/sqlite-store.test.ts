@@ -191,6 +191,60 @@ describe("createSqliteStore", () => {
     });
   });
 
+  describe("replaceFileUnitsWithEmbeddings", () => {
+    it("replaces all existing units for a file with embedded units", () => {
+      store = createSqliteStore(":memory:");
+      const oldUnitA = makeUnit({ id: "old-a", filePath: "src/foo.ts" });
+      const oldUnitB = makeUnit({ id: "old-b", filePath: "src/foo.ts", startLine: 20 });
+      const otherFileUnit = makeUnit({ id: "other", filePath: "src/bar.ts" });
+      store.upsertUnits([oldUnitA, oldUnitB, otherFileUnit]);
+      store.storeEmbeddings([
+        { unitId: "old-a", embedding: [1] },
+        { unitId: "old-b", embedding: [2] },
+        { unitId: "other", embedding: [3] },
+      ]);
+
+      const newUnit = makeUnit({
+        id: "new",
+        filePath: "src/foo.ts",
+        source: "function replacement() {}",
+      });
+      store.replaceFileUnitsWithEmbeddings!(
+        ["src/foo.ts"],
+        [newUnit],
+        [{ unitId: "new", embedding: [4] }],
+      );
+
+      const results = store.getAllWithEmbeddings();
+      const byId = new Map(results.map((result) => [result.unit.id, result]));
+      expect(byId.has("old-a")).toBe(false);
+      expect(byId.has("old-b")).toBe(false);
+      expect(byId.get("new")?.unit.source).toBe("function replacement() {}");
+      expect(byId.get("other")?.embedding[0]).toBeCloseTo(3, 5);
+    });
+
+    it("rolls back stale-unit deletion and new unit insertion when embedding persistence fails", () => {
+      store = createSqliteStore(":memory:");
+      const oldUnit = makeUnit({ id: "old", filePath: "src/foo.ts", source: "old source" });
+      const newUnit = makeUnit({ id: "new", filePath: "src/foo.ts", source: "new source" });
+      store.upsertUnits([oldUnit]);
+      store.storeEmbeddings([{ unitId: "old", embedding: [1] }]);
+
+      expect(() =>
+        store.replaceFileUnitsWithEmbeddings!(
+          ["src/foo.ts"],
+          [newUnit],
+          [{ unitId: "missing-unit", embedding: [2] }],
+        ),
+      ).toThrow();
+
+      const results = store.getAllWithEmbeddings();
+      expect(results).toHaveLength(1);
+      expect(results[0].unit).toEqual(oldUnit);
+      expect(results[0].embedding[0]).toBeCloseTo(1, 5);
+    });
+  });
+
   describe("clear", () => {
     it("removes all data", () => {
       store = createSqliteStore(":memory:");

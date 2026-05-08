@@ -1,6 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-import { CodigamiError, type CodeUnit, type EmbeddingProvider, type FileHashStore, type IndexStore, type LanguageParser } from "../src/types.ts";
+import {
+  CodigamiError,
+  type CodeUnit,
+  type EmbeddingProvider,
+  type FileHashStore,
+  type IndexStore,
+  type LanguageParser,
+} from "../src/types.ts";
 import { runPipeline, type PipelineProgress } from "../src/pipeline.ts";
 import { createHash } from "node:crypto";
 
@@ -57,6 +64,16 @@ describe("runPipeline", () => {
       storeEmbeddings: vi.fn((entries: { unitId: string; embedding: number[] }[]) => {
         storedEmbeddings.push(...entries);
       }),
+      replaceFileUnitsWithEmbeddings: vi.fn(
+        (
+          _filePaths: string[],
+          units: CodeUnit[],
+          entries: { unitId: string; embedding: number[] }[],
+        ) => {
+          storedUnits.push(...units);
+          storedEmbeddings.push(...entries);
+        },
+      ),
       getAllWithEmbeddings: vi.fn(() => [
         { unit: unitA, embedding: [1, 0, 0] },
         { unit: unitB, embedding: [1, 0, 0] },
@@ -94,8 +111,7 @@ describe("runPipeline", () => {
       readFile: createMockFileReader(new Map([["/abs/test.ts", "source"]])),
     });
 
-    expect(mockStore.upsertUnits).toHaveBeenCalled();
-    expect(mockStore.storeEmbeddings).toHaveBeenCalled();
+    expect(mockStore.replaceFileUnitsWithEmbeddings).toHaveBeenCalled();
     expect(storedUnits.length).toBe(3);
     expect(storedEmbeddings.length).toBe(3);
   });
@@ -207,14 +223,26 @@ describe("runPipeline", () => {
 
     // 5 units with batch size 2 = 3 embed calls (2, 2, 1)
     expect(mockEmbeddingProvider.embed).toHaveBeenCalledTimes(3);
-    expect(mockEmbeddingProvider.embed).toHaveBeenNthCalledWith(1, [units[0].source, units[1].source]);
-    expect(mockEmbeddingProvider.embed).toHaveBeenNthCalledWith(2, [units[2].source, units[3].source]);
+    expect(mockEmbeddingProvider.embed).toHaveBeenNthCalledWith(1, [
+      units[0].source,
+      units[1].source,
+    ]);
+    expect(mockEmbeddingProvider.embed).toHaveBeenNthCalledWith(2, [
+      units[2].source,
+      units[3].source,
+    ]);
     expect(mockEmbeddingProvider.embed).toHaveBeenNthCalledWith(3, [units[4].source]);
   });
 
   it("streams across multiple files without holding all units in memory", async () => {
-    const fileAUnits = [makeUnit("a1", "fa", "function fa() {}"), makeUnit("a2", "fb", "function fb() {}")];
-    const fileBUnits = [makeUnit("b1", "fc", "function fc() {}"), makeUnit("b2", "fd", "function fd() {}")];
+    const fileAUnits = [
+      makeUnit("a1", "fa", "function fa() {}"),
+      makeUnit("a2", "fb", "function fb() {}"),
+    ];
+    const fileBUnits = [
+      makeUnit("b1", "fc", "function fc() {}"),
+      makeUnit("b2", "fd", "function fd() {}"),
+    ];
 
     let callCount = 0;
     mockParser.parse = vi.fn(async (_path: string) => {
@@ -352,6 +380,47 @@ describe("runPipeline", () => {
     ).rejects.toThrow("unexpected vector count");
   });
 
+  it("does not persist units when the embedding provider fails", async () => {
+    const providerFailure = new Error("embedding endpoint unavailable");
+    mockEmbeddingProvider.embed = vi.fn(async () => {
+      throw providerFailure;
+    });
+
+    await expect(
+      runPipeline({
+        files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],
+        parser: mockParser,
+        embeddingProvider: mockEmbeddingProvider,
+        store: mockStore,
+        threshold: 0.8,
+        readFile: createMockFileReader(new Map([["/abs/test.ts", "source"]])),
+      }),
+    ).rejects.toThrow(CodigamiError);
+
+    expect(mockStore.upsertUnits).not.toHaveBeenCalled();
+    expect(mockStore.storeEmbeddings).not.toHaveBeenCalled();
+    expect(mockStore.replaceFileUnitsWithEmbeddings).not.toHaveBeenCalled();
+  });
+
+  it("does not persist units when embedding count validation fails", async () => {
+    mockEmbeddingProvider.embed = vi.fn(async () => [[1, 0, 0]]);
+
+    await expect(
+      runPipeline({
+        files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],
+        parser: mockParser,
+        embeddingProvider: mockEmbeddingProvider,
+        store: mockStore,
+        threshold: 0.8,
+        readFile: createMockFileReader(new Map([["/abs/test.ts", "source"]])),
+      }),
+    ).rejects.toThrow(CodigamiError);
+
+    expect(mockStore.upsertUnits).not.toHaveBeenCalled();
+    expect(mockStore.storeEmbeddings).not.toHaveBeenCalled();
+    expect(mockStore.replaceFileUnitsWithEmbeddings).not.toHaveBeenCalled();
+  });
+
   describe("incremental processing with hashStore", () => {
     const createMockHashStore = (initial: Map<string, string> = new Map()): FileHashStore => {
       const hashes = new Map(initial);
@@ -365,8 +434,7 @@ describe("runPipeline", () => {
       };
     };
 
-    const sha256 = (content: string): string =>
-      createHash("sha256").update(content).digest("hex");
+    const sha256 = (content: string): string => createHash("sha256").update(content).digest("hex");
 
     it("skips unchanged files", async () => {
       const fileContent = "source code";
@@ -445,7 +513,12 @@ describe("runPipeline", () => {
         store: mockStore,
         threshold: 0.8,
         hashStore,
-        readFile: createMockFileReader(new Map([["/abs/a.ts", content], ["/abs/b.ts", "other"]])),
+        readFile: createMockFileReader(
+          new Map([
+            ["/abs/a.ts", content],
+            ["/abs/b.ts", "other"],
+          ]),
+        ),
         onProgress: (p) => events.push(p),
       });
 
@@ -475,7 +548,55 @@ describe("runPipeline", () => {
       expect(hashStore.setHash).toHaveBeenCalledWith("test.ts", sha256(content));
     });
 
-    it("deletes stale units for changed files before re-indexing", async () => {
+    it("does not mark a changed file processed or delete stale units when embedding fails", async () => {
+      const hashStore = createMockHashStore(new Map([["test.ts", "old-hash"]]));
+      mockEmbeddingProvider.embed = vi.fn(async () => {
+        throw new Error("embedding endpoint unavailable");
+      });
+
+      await expect(
+        runPipeline({
+          files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],
+          parser: mockParser,
+          embeddingProvider: mockEmbeddingProvider,
+          store: mockStore,
+          threshold: 0.8,
+          hashStore,
+          readFile: createMockFileReader(new Map([["/abs/test.ts", "updated content"]])),
+        }),
+      ).rejects.toThrow(CodigamiError);
+
+      expect(mockStore.deleteByFilePaths).not.toHaveBeenCalledWith(["test.ts"]);
+      expect(mockStore.upsertUnits).not.toHaveBeenCalled();
+      expect(mockStore.storeEmbeddings).not.toHaveBeenCalled();
+      expect(mockStore.replaceFileUnitsWithEmbeddings).not.toHaveBeenCalled();
+      expect(hashStore.setHash).not.toHaveBeenCalled();
+    });
+
+    it("does not mark a changed file processed or delete stale units when embedding count validation fails", async () => {
+      const hashStore = createMockHashStore(new Map([["test.ts", "old-hash"]]));
+      mockEmbeddingProvider.embed = vi.fn(async () => [[1, 0, 0]]);
+
+      await expect(
+        runPipeline({
+          files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],
+          parser: mockParser,
+          embeddingProvider: mockEmbeddingProvider,
+          store: mockStore,
+          threshold: 0.8,
+          hashStore,
+          readFile: createMockFileReader(new Map([["/abs/test.ts", "updated content"]])),
+        }),
+      ).rejects.toThrow(CodigamiError);
+
+      expect(mockStore.deleteByFilePaths).not.toHaveBeenCalledWith(["test.ts"]);
+      expect(mockStore.upsertUnits).not.toHaveBeenCalled();
+      expect(mockStore.storeEmbeddings).not.toHaveBeenCalled();
+      expect(mockStore.replaceFileUnitsWithEmbeddings).not.toHaveBeenCalled();
+      expect(hashStore.setHash).not.toHaveBeenCalled();
+    });
+
+    it("deletes stale units for changed files after embeddings are ready", async () => {
       const hashStore = createMockHashStore(new Map([["test.ts", "old-hash"]]));
 
       await runPipeline({
@@ -488,8 +609,16 @@ describe("runPipeline", () => {
         readFile: createMockFileReader(new Map([["/abs/test.ts", "updated content"]])),
       });
 
-      // Should delete old units for the changed file before re-processing
-      expect(mockStore.deleteByFilePaths).toHaveBeenCalledWith(["test.ts"]);
+      expect(mockStore.replaceFileUnitsWithEmbeddings).toHaveBeenCalledWith(
+        ["test.ts"],
+        [unitA, unitB, unitC],
+        [
+          { unitId: unitA.id, embedding: [1, 0, 0] },
+          { unitId: unitB.id, embedding: [1, 0, 0] },
+          { unitId: unitC.id, embedding: [1, 0, 0] },
+        ],
+      );
+      expect(hashStore.setHash).toHaveBeenCalledWith("test.ts", sha256("updated content"));
     });
   });
 });

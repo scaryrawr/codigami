@@ -3,7 +3,16 @@ import type { DiscoveredFile } from "./scanning/file-walker.ts";
 import { detectFileChanges, hashContent } from "./scanning/file-change-detector.ts";
 import { clusterDuplicates, findDuplicatePairs } from "./matching/duplicate-finder.ts";
 import { formatReport } from "./output/json-formatter.ts";
-import { CodigamiError, type CodeUnit, type DuplicateReport, type EmbeddingProvider, type FileHashStore, type IndexStore, type LanguageParser } from "./types.ts";
+import {
+  CodigamiError,
+  type CodeUnit,
+  type DuplicateReport,
+  type EmbeddingProvider,
+  type FileHashStore,
+  type IndexStore,
+  type LanguageParser,
+  type StoredEmbedding,
+} from "./types.ts";
 
 export type PipelineProgress =
   | { stage: "parsing"; current: number; total: number; path: string }
@@ -25,6 +34,24 @@ export interface PipelineInput {
   onProgress?: (progress: PipelineProgress) => void;
 }
 
+interface ParsedFileState {
+  filePath: string;
+  sourceHash: string | undefined;
+  units: CodeUnit[];
+  embeddings: Map<string, number[]>;
+  remainingEmbeddings: number;
+  persisted: boolean;
+}
+
+interface BufferedUnit {
+  state: ParsedFileState;
+  unit: CodeUnit;
+}
+
+const describeUnknownError = (error: unknown): string => {
+  return error instanceof Error ? error.message : String(error);
+};
+
 export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport> => {
   const {
     files,
@@ -40,7 +67,9 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
   } = input;
 
   if (!Number.isInteger(embeddingBatchSize) || embeddingBatchSize <= 0) {
-    throw new CodigamiError("embeddingBatchSize must be a positive integer", { embeddingBatchSize });
+    throw new CodigamiError("embeddingBatchSize must be a positive integer", {
+      embeddingBatchSize,
+    });
   }
 
   if (!Number.isInteger(parseConcurrency) || parseConcurrency <= 0) {
@@ -60,12 +89,6 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
       onProgress?.({ stage: "pruning", count: changes.deleted.length });
     }
 
-    // Prune changed files from index (will be re-indexed below)
-    const changedPaths = filesToProcess.map((f) => f.relativePath);
-    if (changedPaths.length > 0) {
-      store.deleteByFilePaths(changedPaths);
-    }
-
     const skippedCount = files.length - filesToProcess.length;
     if (skippedCount > 0) {
       onProgress?.({ stage: "skipped", count: skippedCount, total: files.length });
@@ -75,8 +98,9 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
   }
 
   let totalUnits = 0;
+  let embeddedUnits = 0;
   let batchIndex = 0;
-  let buffer: CodeUnit[] = [];
+  let buffer: BufferedUnit[] = [];
 
   const flushBuffer = async () => {
     while (buffer.length >= embeddingBatchSize) {
@@ -85,11 +109,53 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
     }
   };
 
-  const embedAndStore = async (units: CodeUnit[]) => {
-    store.upsertUnits(units);
+  const persistProcessedFile = (state: ParsedFileState): void => {
+    if (state.persisted) return;
+    if (state.remainingEmbeddings !== 0) {
+      throw new CodigamiError("Cannot persist file before all embeddings are available", {
+        filePath: state.filePath,
+        remainingEmbeddings: state.remainingEmbeddings,
+      });
+    }
 
-    const texts = units.map((u) => u.source);
-    const embeddings = await embeddingProvider.embed(texts);
+    const entries: StoredEmbedding[] = state.units.map((unit) => {
+      const embedding = state.embeddings.get(unit.id);
+      if (embedding === undefined) {
+        throw new CodigamiError("Missing embedding for code unit", {
+          filePath: state.filePath,
+          unitId: unit.id,
+        });
+      }
+
+      return { unitId: unit.id, embedding };
+    });
+
+    store.replaceFileUnitsWithEmbeddings([state.filePath], state.units, entries);
+
+    if (hashStore) {
+      if (state.sourceHash === undefined) {
+        throw new CodigamiError("Missing content hash for processed file", {
+          filePath: state.filePath,
+        });
+      }
+      hashStore.setHash(state.filePath, state.sourceHash);
+    }
+
+    state.persisted = true;
+  };
+
+  const embedAndStore = async (items: BufferedUnit[]) => {
+    const texts = items.map((item) => item.unit.source);
+    let embeddings: number[][];
+    try {
+      embeddings = await embeddingProvider.embed(texts);
+    } catch (error) {
+      if (error instanceof CodigamiError) throw error;
+      throw new CodigamiError("Embedding provider failed", {
+        cause: describeUnknownError(error),
+        unitCount: texts.length,
+      });
+    }
 
     if (embeddings.length !== texts.length) {
       throw new CodigamiError("Embedding provider returned unexpected vector count", {
@@ -98,14 +164,31 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
       });
     }
 
-    const entries = units.map((unit, idx) => ({
-      unitId: unit.id,
-      embedding: embeddings[idx],
-    }));
-    store.storeEmbeddings(entries);
+    const affectedStates = new Set<ParsedFileState>();
+    for (let idx = 0; idx < items.length; idx++) {
+      const item = items[idx];
+      const embedding = embeddings[idx];
+      if (item === undefined || embedding === undefined) {
+        throw new CodigamiError("Embedding provider returned unexpected vector count", {
+          expected: texts.length,
+          received: embeddings.length,
+        });
+      }
 
+      item.state.embeddings.set(item.unit.id, embedding);
+      item.state.remainingEmbeddings--;
+      affectedStates.add(item.state);
+    }
+
+    for (const state of affectedStates) {
+      if (state.remainingEmbeddings === 0) {
+        persistProcessedFile(state);
+      }
+    }
+
+    embeddedUnits += items.length;
     batchIndex++;
-    onProgress?.({ stage: "embedding", batchIndex, unitsProcessed: totalUnits - buffer.length, totalUnits });
+    onProgress?.({ stage: "embedding", batchIndex, unitsProcessed: embeddedUnits, totalUnits });
   };
 
   // 1. Stream: parse files and embed in batches
@@ -115,7 +198,12 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
     const results = await Promise.all(
       batch.map(async (file, batchIdx) => {
         const fileIndex = i + batchIdx;
-        onProgress?.({ stage: "parsing", current: fileIndex + 1, total: filesToProcess.length, path: file.relativePath });
+        onProgress?.({
+          stage: "parsing",
+          current: fileIndex + 1,
+          total: filesToProcess.length,
+          path: file.relativePath,
+        });
 
         const source = await readFile(file.absolutePath);
         const units = await parser.parse(file.relativePath, source);
@@ -124,11 +212,21 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
     );
 
     for (const { file, source, units } of results) {
-      buffer.push(...units);
+      const state: ParsedFileState = {
+        filePath: file.relativePath,
+        sourceHash: hashStore ? hashContent(source) : undefined,
+        units,
+        embeddings: new Map(),
+        remainingEmbeddings: units.length,
+        persisted: false,
+      };
+
       totalUnits += units.length;
 
-      if (hashStore) {
-        hashStore.setHash(file.relativePath, hashContent(source));
+      if (units.length === 0) {
+        persistProcessedFile(state);
+      } else {
+        buffer.push(...units.map((unit) => ({ state, unit })));
       }
     }
 

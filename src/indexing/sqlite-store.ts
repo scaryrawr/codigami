@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { type CodeUnit, type IndexStore } from "../types.ts";
+import { type CodeUnit, type IndexStore, type StoredEmbedding } from "../types.ts";
 
 type SqliteDatabase = InstanceType<typeof Database>;
 
@@ -60,13 +60,33 @@ const createStore = (db: SqliteDatabase, closeDatabase: boolean): IndexStore => 
     }
   });
 
-  const storeEmbeddings = db.transaction((entries: { unitId: string; embedding: number[] }[]) => {
+  const deleteByFilePath = db.prepare("DELETE FROM code_units WHERE file_path = @filePath");
+
+  const storeEmbeddings = db.transaction((entries: StoredEmbedding[]) => {
     for (const entry of entries) {
       const float32 = new Float32Array(entry.embedding);
       const vector = Buffer.from(float32.buffer);
       upsertEmbedding.run({ unitId: entry.unitId, vector });
     }
   });
+
+  const replaceFileUnitsWithEmbeddings = db.transaction(
+    (filePaths: string[], units: CodeUnit[], entries: StoredEmbedding[]) => {
+      for (const filePath of filePaths) {
+        deleteByFilePath.run({ filePath });
+      }
+
+      for (const unit of units) {
+        upsertUnit.run(unit);
+      }
+
+      for (const entry of entries) {
+        const float32 = new Float32Array(entry.embedding);
+        const vector = Buffer.from(float32.buffer);
+        upsertEmbedding.run({ unitId: entry.unitId, vector });
+      }
+    },
+  );
 
   const getAllWithEmbeddings = (): { unit: CodeUnit; embedding: number[] }[] => {
     const rows = selectAllWithEmbeddings.all() as Array<{
@@ -102,8 +122,6 @@ const createStore = (db: SqliteDatabase, closeDatabase: boolean): IndexStore => 
     }));
   };
 
-  const deleteByFilePath = db.prepare("DELETE FROM code_units WHERE file_path = @filePath");
-
   const deleteByFilePaths = db.transaction((filePaths: string[]) => {
     for (const filePath of filePaths) {
       deleteByFilePath.run({ filePath });
@@ -123,6 +141,7 @@ const createStore = (db: SqliteDatabase, closeDatabase: boolean): IndexStore => 
   return {
     upsertUnits,
     storeEmbeddings,
+    replaceFileUnitsWithEmbeddings,
     getAllWithEmbeddings,
     deleteByFilePaths,
     clear,
