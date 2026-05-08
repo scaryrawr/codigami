@@ -1,8 +1,12 @@
 # Codigami
 
+**Code + Shinigami. The goal: delete, delete, delete.**
+
+![death note delete](./assets/delete.gif)
+
 Find duplicate code using embedding similarity — not lexical matching.
 
-Codigami parses your codebase into semantic units (functions, classes, methods), converts them to vector embeddings via any OpenAI-compatible API, then clusters units whose embeddings exceed a cosine similarity threshold. The result is a report of code that *means* the same thing, even if it *looks* different.
+Codigami parses your codebase into semantic units (functions, classes, methods), converts them to vector embeddings via any OpenAI-compatible API, then clusters units whose embeddings exceed a cosine similarity threshold. The result is a report of code that _means_ the same thing, even if it _looks_ different — so you can identify what to prune.
 
 ## How It Works
 
@@ -32,7 +36,7 @@ Each unit captures its file path, line range, name, type, and full source text.
 
 Code units are batched and sent to an OpenAI-compatible embeddings endpoint. By default, Codigami uses a local server running [Jina Code Embeddings](https://huggingface.co/jinaai/jina-embeddings-v2-base-code) (1.5B MLX variant), but any endpoint implementing the `/v1/embeddings` API works — including OpenAI directly.
 
-Each unit's source code is converted to a high-dimensional vector that captures its *semantic meaning*, not just its syntax.
+Each unit's source code is converted to a high-dimensional vector that captures its _semantic meaning_, not just its syntax.
 
 ### 3. Indexing
 
@@ -96,15 +100,15 @@ npx codigami --output report.json
 
 ### CLI Options
 
-| Option | Short | Description | Default |
-|--------|-------|-------------|---------|
-| `--dir` | `-d` | Directory to scan | `.` |
-| `--endpoint` | `-e` | OpenAI-compatible embedding endpoint | `http://localhost:14982/v1` |
-| `--model` | `-m` | Embedding model name | `jina-code-embeddings-1.5b-mlx` |
-| `--threshold` | `-t` | Similarity threshold (0.0–1.0) | `0.8` |
-| `--db` | | SQLite database path | `<dir>/.codigami/index.db` |
-| `--output` | `-o` | Write JSON report to file | stdout |
-| `--help` | `-h` | Show help message | |
+| Option        | Short | Description                          | Default                         |
+| ------------- | ----- | ------------------------------------ | ------------------------------- |
+| `--dir`       | `-d`  | Directory to scan                    | `.`                             |
+| `--endpoint`  | `-e`  | OpenAI-compatible embedding endpoint | `http://localhost:14982/v1`     |
+| `--model`     | `-m`  | Embedding model name                 | `jina-code-embeddings-1.5b-mlx` |
+| `--threshold` | `-t`  | Similarity threshold (0.0–1.0)       | `0.8`                           |
+| `--db`        |       | SQLite database path                 | `<dir>/.codigami/index.db`      |
+| `--output`    | `-o`  | Write JSON report to file            | stdout                          |
+| `--help`      | `-h`  | Show help message                    |                                 |
 
 ## Architecture
 
