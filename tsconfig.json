@@ -9,6 +9,7 @@
     "declaration": true,
     "sourceMap": true,
     "noEmitOnError": true,
+    "rewriteRelativeImportExtensions": true,
     "isolatedModules": true,
     "skipLibCheck": true
   },
