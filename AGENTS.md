@@ -5,6 +5,7 @@ Embeddings-based tool for identifying semantically and intent-equivalent duplica
 ## Commands
 
 ```bash
+npm install         # install dependencies
 npm run typecheck   # tsgo --noEmit
 npm run build       # tsgo
 npm run test        # vitest run
@@ -15,28 +16,31 @@ npm run fmt         # oxfmt .
 npm run fmt:check   # oxfmt . --check
 ```
 
-Run `typecheck` + `test` before committing. Use `fmt:check` for CI-style validation.
+Run `typecheck` + `test` before committing. Use `fmt:check` for CI-style validation. For narrow checks, run a single Vitest file with `npm run test -- test/path/to/file.test.ts`.
 
 ## Architecture
 
-The project is a library that scans codebases and surfaces duplicate code clusters identified by embedding similarity, not lexical matching.
+The project is a TypeScript ESM library and CLI that scans codebases and surfaces duplicate code clusters identified by embedding similarity, not lexical matching.
 
-Core modules (target structure):
+Core modules:
 
 | Module | Responsibility |
 |---|---|
-| `scanning` | File discovery, chunking, and source extraction |
-| `embedding` | Text → embedding conversion (provider abstraction) |
-| `indexing` | Build and persist the similarity index |
-| `matching` | Query the index, compute similarity, surface results |
-| `output` | Format and render findings (CLI, JSON, etc.) |
+| `src/cli.ts` | CLI argument parsing, default wiring, progress output, lifecycle cleanup |
+| `src/pipeline.ts` | Orchestrates discovery results, parsing, batching, embedding, indexing, matching, and report formatting |
+| `src/types.ts` | Shared public interfaces and `CodigamiError` |
+| `src/scanning` | File discovery, file hashing, tree-sitter parsing, and optional worker-thread parser pool |
+| `src/embedding` | OpenAI-compatible embedding provider abstraction |
+| `src/indexing` | SQLite stores for code units, embeddings, and file hashes |
+| `src/matching` | Cosine similarity, duplicate pair detection, and union-find clustering |
+| `src/output` | JSON report formatting |
 
-Keep each module focused on a single responsibility. Prefer narrow interfaces and dependency injection over direct imports between modules.
+Keep each module focused on one responsibility. Prefer narrow interfaces and dependency injection over direct imports between modules; the CLI is the main composition root for concrete providers and stores.
 
 ## TDD
 
 - **Write the test first.** Every feature, utility, or module starts with a failing test.
-- **Keep tests fast and deterministic.** Mock external calls (embedding providers, file I/O) in unit tests; reserve integration tests for end-to-end scanning flows.
+- **Keep tests fast and deterministic.** Mock external calls, embedding providers, and file I/O in unit tests; use temporary directories for filesystem behavior.
 - **Prefer `describe` / `it` with Vitest.** Use `expect` with matchers; avoid `assert` imports.
 - **Test behavior, not implementation.** Assert on public API outcomes, not internal state or exact call counts.
 - **Edge cases first.** Null sources, empty chunks, missing embeddings, and malformed files should be tested before happy paths.
@@ -52,12 +56,14 @@ Keep each module focused on a single responsibility. Prefer narrow interfaces an
 
 - **TypeScript strict mode** — no `any`, use `unknown` for untyped input, prefer `as` casts only at boundaries.
 - **Named exports** — avoid default exports; use `export const` and `export interface`.
+- **ESM imports** — use explicit `.ts` extensions for local source imports, matching the current `NodeNext` setup.
 - **File naming** — kebab-case for modules (e.g., `embedding-provider.ts`), PascalCase for interfaces and types.
 - **Error handling** — throw typed errors (`CodigamiError`) with a message and optional context; never swallow errors silently.
-- **Public API surface** — only export what the public consumer needs; keep internals `private` or unexported.
+- **Public API surface** — expose consumer-facing APIs from `src/index.ts`; keep internals unexported unless tests or downstream users need them.
 
 ## Safety
 
 - **Never embed secrets.** API keys and tokens belong in environment variables, never in code or tests.
-- **Rate-limit external calls.** Embedding providers are remote; always add backoff and circuit-breaking in production wiring.
-- **Respect file permissions.** Scanning should fail gracefully on unreadable files, never crash the run.
+- **External embedding calls are expensive and remote.** Batch intentionally, keep unit tests mocked, and surface provider failures as `CodigamiError`.
+- **Respect file permissions.** Scanning should fail with useful typed errors on unreadable files; do not hide failures with silent skips.
+- **SQLite indexes are generated artifacts.** Do not commit `.codigami/index.db` or other scan outputs unless explicitly requested.
