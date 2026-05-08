@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  clusterDuplicates,
-  findDuplicatePairs,
-} from "../../src/matching/duplicate-finder.ts";
+import { clusterDuplicates, findDuplicatePairs } from "../../src/matching/duplicate-finder.ts";
 import type { CodeUnit, DuplicatePair } from "../../src/types.ts";
 
 const makeUnit = (id: string): CodeUnit => ({
@@ -70,6 +67,63 @@ describe("findDuplicatePairs", () => {
     const pairs = findDuplicatePairs(entries, 0.5);
     expect(pairs).toHaveLength(1);
   });
+
+  it("uses exhaustive retrieval for small inputs to preserve threshold semantics", () => {
+    const entries = [
+      { unit: makeUnit("a"), embedding: [1, 0] },
+      { unit: makeUnit("b"), embedding: [1, 0] },
+      { unit: makeUnit("c"), embedding: [1, 0] },
+    ];
+
+    const pairs = findDuplicatePairs(entries, 0.9, {
+      exhaustiveSearchLimit: 3,
+      maxCandidatesPerUnit: 1,
+    });
+
+    expect(pairs.map((pair) => [pair.unitA.id, pair.unitB.id])).toEqual([
+      ["a", "b"],
+      ["a", "c"],
+      ["b", "c"],
+    ]);
+  });
+
+  it("bounds large-input retrieval while keeping duplicate clusters connected", () => {
+    const entries = Array.from({ length: 8 }, (_, i) => ({
+      unit: makeUnit(`u${i}`),
+      embedding: [1, 0, 0],
+    }));
+
+    const pairs = findDuplicatePairs(entries, 0.9, {
+      exhaustiveSearchLimit: 0,
+      maxCandidatesPerUnit: 1,
+    });
+
+    expect(pairs).toHaveLength(7);
+    expect(pairs.length).toBeLessThan((entries.length * (entries.length - 1)) / 2);
+
+    const clusters = clusterDuplicates(pairs);
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0].units.map((unit) => unit.id).sort()).toEqual(
+      entries.map((entry) => entry.unit.id).sort(),
+    );
+  });
+
+  it("prioritizes specific buckets before broad dimension buckets in bounded retrieval", () => {
+    const entries = [
+      { unit: makeUnit("source"), embedding: [1, 0] },
+      { unit: makeUnit("near-a"), embedding: [1, 1] },
+      { unit: makeUnit("near-b"), embedding: [1, -1] },
+      { unit: makeUnit("target"), embedding: [1, 0] },
+    ];
+
+    const pairs = findDuplicatePairs(entries, 0.9, {
+      exhaustiveSearchLimit: 0,
+      maxCandidatesPerUnit: 1,
+    });
+
+    expect(pairs).toHaveLength(1);
+    expect([pairs[0].unitA.id, pairs[0].unitB.id]).toEqual(["source", "target"]);
+  });
 });
 
 describe("clusterDuplicates", () => {
@@ -101,7 +155,7 @@ describe("clusterDuplicates", () => {
 
     const pairs: DuplicatePair[] = [
       { unitA: a, unitB: b, similarity: 0.95 },
-      { unitA: c, unitB: d, similarity: 0.90 },
+      { unitA: c, unitB: d, similarity: 0.9 },
     ];
 
     const clusters = clusterDuplicates(pairs);
@@ -125,7 +179,7 @@ describe("clusterDuplicates", () => {
 
     const pairs: DuplicatePair[] = [
       { unitA: a, unitB: b, similarity: 0.95 },
-      { unitA: c, unitB: d, similarity: 0.90 },
+      { unitA: c, unitB: d, similarity: 0.9 },
     ];
 
     const clusters = clusterDuplicates(pairs);

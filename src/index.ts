@@ -23,6 +23,7 @@ export { createSqliteStore } from "./indexing/sqlite-store.ts";
 
 export { cosineSimilarity } from "./matching/similarity.ts";
 export { findDuplicatePairs, clusterDuplicates } from "./matching/duplicate-finder.ts";
+export type { DuplicatePairSearchOptions } from "./matching/duplicate-finder.ts";
 
 export { formatReport } from "./output/json-formatter.ts";
 export type { FormatInput } from "./output/json-formatter.ts";
