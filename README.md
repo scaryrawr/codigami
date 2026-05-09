@@ -30,7 +30,6 @@ The CLI walks the target directory and discovers files matching these extensions
 - C#: `.cs`
 - C++: `.cpp`, `.cc`, `.cxx`, `.c++`, `.hpp`, `.hh`, `.hxx`, `.h++`, `.h`
 - C: `.c`
-- Zig: `.zig`
 - Go: `.go`
 - Bash: `.sh`, `.bash`
 - Python: `.py`
@@ -44,7 +43,6 @@ Discovered files are parsed with [web-tree-sitter](https://github.com/tree-sitte
 - C# classes/structs/records, methods, and constructors
 - C function definitions
 - C++ function definitions and class/struct specifiers, including inline method bodies
-- Zig functions and struct declarations assigned to variables
 - Go functions and methods
 - Bash functions
 - Python functions, classes, and methods inside classes

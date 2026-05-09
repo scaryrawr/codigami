@@ -5,7 +5,6 @@ import { CodigamiError, type CodeUnit, type LanguageParser } from "../types.ts";
 import { extractCodeUnitsFromRootNode as extractTypescriptCodeUnits } from "./typescript-unit-extractor.ts";
 import {
   extractCodeUnitsByRules,
-  hasChildOfType,
   nameFromDeclarator,
   nameFromField,
   nameFromFirstChild,
@@ -107,21 +106,6 @@ const CPP_RULES: readonly UnitExtractionRule[] = [
 
 const C_RULES: readonly UnitExtractionRule[] = [C_FAMILY_FUNCTION_RULE];
 
-const ZIG_RULES: readonly UnitExtractionRule[] = [
-  {
-    nodeType: "function_declaration",
-    unitType: "function_declaration",
-    getName: nameFromField,
-  },
-  {
-    nodeType: "variable_declaration",
-    unitType: "struct_declaration",
-    getName: nameFromFirstChild("identifier"),
-    shouldExtract: hasChildOfType("struct_declaration"),
-    descendIntoChildren: true,
-  },
-];
-
 const GO_RULES: readonly UnitExtractionRule[] = [
   {
     nodeType: "function_declaration",
@@ -194,12 +178,6 @@ export const DEFAULT_LANGUAGE_DEFINITIONS: readonly TreeSitterLanguageDefinition
     extensions: [".c"],
     wasmModule: "tree-sitter-c/tree-sitter-c.wasm",
     rules: C_RULES,
-  },
-  {
-    language: "zig",
-    extensions: [".zig"],
-    wasmModule: "@tree-sitter-grammars/tree-sitter-zig/tree-sitter-zig.wasm",
-    rules: ZIG_RULES,
   },
   {
     language: "go",

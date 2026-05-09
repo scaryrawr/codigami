@@ -80,23 +80,6 @@ const examples: LanguageExample[] = [
     ],
   },
   {
-    language: "zig",
-    filePath: "calculator.zig",
-    source: [
-      "pub fn add(a: i32, b: i32) i32 {",
-      "    return a + b;",
-      "}",
-      "const Calculator = struct {",
-      "    pub fn sub(self: Calculator, a: i32, b: i32) i32 { return a - b; }",
-      "};",
-    ].join("\n"),
-    expected: [
-      ["function_declaration", "add"],
-      ["struct_declaration", "Calculator"],
-      ["function_declaration", "sub"],
-    ],
-  },
-  {
     language: "go",
     filePath: "calculator.go",
     source: [
@@ -133,15 +116,9 @@ const examples: LanguageExample[] = [
   {
     language: "bash",
     filePath: "scripts/utils.sh",
-    source: [
-      "add() {",
-      "  echo $1 $2",
-      "}",
-      "",
-      "function sub() {",
-      "  echo $1 - $2",
-      "}",
-    ].join("\n"),
+    source: ["add() {", "  echo $1 $2", "}", "", "function sub() {", "  echo $1 - $2", "}"].join(
+      "\n",
+    ),
     expected: [
       ["function_definition", "add"],
       ["function_definition", "sub"],
@@ -157,7 +134,7 @@ describe("createDefaultLanguageParser", () => {
     parser = await createDefaultLanguageParser();
   });
 
-  it("supports TypeScript/JavaScript plus Rust, C#, C++, C, Zig, Go, Python, and Bash extensions", () => {
+  it("supports TypeScript/JavaScript plus Rust, C#, C++, C, Go, Python, and Bash extensions", () => {
     expect(parser.extensions).toEqual(
       expect.arrayContaining([
         ".ts",
@@ -172,7 +149,6 @@ describe("createDefaultLanguageParser", () => {
         ".hpp",
         ".h",
         ".c",
-        ".zig",
         ".go",
         ".py",
         ".sh",
@@ -244,11 +220,6 @@ describe("createDefaultLanguageParser", () => {
       "rust",
       "calculator.rs",
       "impl Calculator { pub fn add(&self, a: i32, b: i32) -> i32 { a + b } }",
-    ],
-    [
-      "zig",
-      "calculator.zig",
-      "const Calculator = struct { pub fn add(self: Calculator, a: i32, b: i32) i32 { return a + b; } };",
     ],
   ])("assigns unique IDs to nested one-line %s units", async (_language, filePath, source) => {
     const units = await parser.parse(filePath, source);

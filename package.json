@@ -20,7 +20,6 @@
     "fmt:check": "oxfmt . --check"
   },
   "dependencies": {
-    "@tree-sitter-grammars/tree-sitter-zig": "^1.1.2",
     "better-sqlite3": "^12.9.0",
     "openai": "^6.37.0",
     "tree-sitter-bash": "^0.25.1",
