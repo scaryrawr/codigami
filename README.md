@@ -38,13 +38,14 @@ The walker skips `node_modules`, `.git`, hidden files, and hidden directories.
 
 Discovered files are parsed with [web-tree-sitter](https://github.com/tree-sitter/tree-sitter/tree/master/lib/binding_web) using language-specific tree-sitter grammars. The default multi-language parser loads a grammar on demand the first time a matching file extension is parsed. Codigami currently extracts semantic code units such as:
 
-- TypeScript/JavaScript functions, exported declarations, lexical arrow/function expressions, classes, and class methods
-- Rust `fn` items and `impl` blocks with methods
+- TypeScript/JavaScript top-level and exported function/class declarations, top-level lexical arrow/function expressions, and class methods
+- Rust `fn` items and `impl` blocks, including methods inside `impl` blocks
 - C# classes/structs/records, methods, and constructors
-- C and C++ function definitions, plus C++ classes/structs with inline methods
+- C function definitions
+- C++ function definitions and class/struct specifiers, including inline method bodies
 - Zig functions and struct declarations assigned to variables
 - Go functions and methods
-- Python functions, classes, and class methods
+- Python functions, classes, and methods inside classes
 
 Each unit includes:
 
@@ -66,7 +67,7 @@ By default, the CLI uses the SQLite index as an incremental cache:
 - changed files are re-parsed and re-embedded
 - existing units for a changed file are replaced only after all new embeddings for that file are available
 
-Use `--full` to ignore file hashes and process all currently discovered files. This reprocesses discovered files, but it does not clear the database first; delete `.codigami/index.db` or use a fresh `--db` path if you want a completely clean index. Built-in parser/extractor changes invalidate hashes automatically through the parser cache key.
+Use `--full` to ignore file hashes and process all currently discovered files. This reprocesses discovered files and replaces their indexed units, but it does not clear the database first or prune files that no longer exist; delete `.codigami/index.db` or use a fresh `--db` path if you want a completely clean index. Built-in parser/extractor changes invalidate hashes automatically through the parser cache key.
 
 ### 3. Embedding
 
@@ -85,7 +86,7 @@ Code units and embeddings are persisted in SQLite (`.codigami/index.db` by defau
 
 - `code_units` — parsed unit metadata and source text
 - `embeddings` — vectors stored as `Float32Array` blobs
-- `file_hashes` — content/parser cache hashes for incremental runs
+- `file_hashes` — content/parser cache hashes when incremental mode is active
 
 SQLite is configured with WAL mode and foreign keys enabled. Embeddings are deleted automatically when their code unit is deleted.
 
@@ -235,7 +236,7 @@ Core interfaces are intentionally narrow:
 - `EmbeddingProvider` converts source strings into embedding vectors
 - `IndexStore` persists units and embeddings
 
-The pipeline also supports a file-hash store for incremental processing; the CLI wires the SQLite-backed implementation by default.
+The pipeline also supports a file-hash store for incremental processing; the CLI wires the SQLite-backed implementation by default. Without a `hashStore`, `runPipeline` processes every file passed to it. Useful advanced options include `embeddingBatchSize`, `parseConcurrency`, `readFile`, and `onProgress`.
 
 ## Architecture
 
@@ -250,6 +251,7 @@ src/
 │   ├── file-change-detector.ts         # SHA-256 file hashing and change/deletion detection
 │   ├── multi-language-parser.ts        # Default web-tree-sitter parser registry for supported languages
 │   ├── tree-sitter-unit-extractor.ts   # Rule-based unit extraction helpers for tree-sitter nodes
+│   ├── typescript-parser-loader.ts     # Lazy TypeScript/TSX grammar loading
 │   ├── typescript-parser.ts            # web-tree-sitter TypeScript parser adapter
 │   ├── typescript-unit-extractor.ts    # TypeScript/JavaScript unit extraction
 │   ├── parser-pool.ts                  # Optional worker-thread parser pool
