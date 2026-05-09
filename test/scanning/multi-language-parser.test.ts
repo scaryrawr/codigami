@@ -130,6 +130,23 @@ const examples: LanguageExample[] = [
       ["function_definition", "sub"],
     ],
   },
+  {
+    language: "bash",
+    filePath: "scripts/utils.sh",
+    source: [
+      "add() {",
+      "  echo $1 $2",
+      "}",
+      "",
+      "function sub() {",
+      "  echo $1 - $2",
+      "}",
+    ].join("\n"),
+    expected: [
+      ["function_definition", "add"],
+      ["function_definition", "sub"],
+    ],
+  },
 ];
 
 describe("createDefaultLanguageParser", () => {
@@ -140,7 +157,7 @@ describe("createDefaultLanguageParser", () => {
     parser = await createDefaultLanguageParser();
   });
 
-  it("supports TypeScript/JavaScript plus Rust, C#, C++, C, Zig, Go, and Python extensions", () => {
+  it("supports TypeScript/JavaScript plus Rust, C#, C++, C, Zig, Go, Python, and Bash extensions", () => {
     expect(parser.extensions).toEqual(
       expect.arrayContaining([
         ".ts",
@@ -158,6 +175,8 @@ describe("createDefaultLanguageParser", () => {
         ".zig",
         ".go",
         ".py",
+        ".sh",
+        ".bash",
       ]),
     );
   });

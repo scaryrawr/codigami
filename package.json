@@ -23,6 +23,7 @@
     "@tree-sitter-grammars/tree-sitter-zig": "^1.1.2",
     "better-sqlite3": "^12.9.0",
     "openai": "^6.37.0",
+    "tree-sitter-bash": "^0.25.1",
     "tree-sitter-c": "^0.24.1",
     "tree-sitter-c-sharp": "^0.23.5",
     "tree-sitter-cpp": "^0.23.4",

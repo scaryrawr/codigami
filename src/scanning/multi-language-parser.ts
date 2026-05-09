@@ -149,6 +149,15 @@ const PYTHON_RULES: readonly UnitExtractionRule[] = [
   },
 ];
 
+const BASH_RULES: readonly UnitExtractionRule[] = [
+  {
+    nodeType: "function_definition",
+    unitType: "function_definition",
+    getName: nameFromFirstChild("word"),
+    descendIntoChildren: true,
+  },
+];
+
 export const DEFAULT_LANGUAGE_DEFINITIONS: readonly TreeSitterLanguageDefinition[] = [
   {
     language: "typescript",
@@ -203,6 +212,12 @@ export const DEFAULT_LANGUAGE_DEFINITIONS: readonly TreeSitterLanguageDefinition
     extensions: [".py"],
     wasmModule: "tree-sitter-python/tree-sitter-python.wasm",
     rules: PYTHON_RULES,
+  },
+  {
+    language: "bash",
+    extensions: [".sh", ".bash"],
+    wasmModule: "tree-sitter-bash/tree-sitter-bash.wasm",
+    rules: BASH_RULES,
   },
 ];
 
