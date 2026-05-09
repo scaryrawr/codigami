@@ -12,7 +12,7 @@ export type {
 } from "./types.ts";
 export { makeUnitId } from "./types.ts";
 
-export { walkDirectory } from "./scanning/file-walker.ts";
+export { walkDirectories, walkDirectory } from "./scanning/file-walker.ts";
 export type { DiscoveredFile } from "./scanning/file-walker.ts";
 export { createTypescriptParser } from "./scanning/typescript-parser.ts";
 export {

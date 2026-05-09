@@ -159,6 +159,9 @@ npx codigami
 # Scan a specific directory with a custom threshold
 npx codigami --dir ./src --threshold 0.85
 
+# Scan related directories together
+npx codigami --dir ./packages/foo --dir ./packages/bar
+
 # Use a different OpenAI-compatible embedding endpoint/model
 npx codigami --endpoint http://localhost:14982/v1 --model jina-code-embeddings-1.5b-mlx
 
@@ -176,7 +179,7 @@ npx codigami --db /tmp/codigami-index.db
 
 | Option        | Short | Description                                                      | Default                         |
 | ------------- | ----- | ---------------------------------------------------------------- | ------------------------------- |
-| `--dir`       | `-d`  | Directory to scan                                                | `.`                             |
+| `--dir`       | `-d`  | Directory to scan; repeat to scan multiple directories           | `.`                             |
 | `--endpoint`  | `-e`  | OpenAI-compatible embedding endpoint                             | `http://localhost:14982/v1`     |
 | `--model`     | `-m`  | Embedding model name                                             | `jina-code-embeddings-1.5b-mlx` |
 | `--threshold` | `-t`  | Similarity threshold, from `0.0` to `1.0`                        | `0.8`                           |
@@ -237,6 +240,8 @@ Core interfaces are intentionally narrow:
 - `IndexStore` persists units and embeddings
 
 The pipeline also supports a file-hash store for incremental processing; the CLI wires the SQLite-backed implementation by default. Without a `hashStore`, `runPipeline` processes every file passed to it. Useful advanced options include `embeddingBatchSize`, `parseConcurrency`, `readFile`, and `onProgress`.
+
+Use `walkDirectories([dirA, dirB], extensions)` when you want to process multiple target directories as one scan while keeping their relative paths distinct.
 
 ## Architecture
 

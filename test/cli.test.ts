@@ -50,7 +50,8 @@ const mocks = vi.hoisted(() => {
     mkdir: vi.fn(async () => {}),
     writeFile: vi.fn(async () => {}),
     parserInit: vi.fn(async () => {}),
-    walkDirectory: vi.fn(async () => []),
+    commonDirectory: vi.fn((paths: string[]) => paths[0] ?? "."),
+    walkDirectories: vi.fn(async () => []),
     createDefaultLanguageParser: vi.fn(async () => ({
       language: "multi",
       extensions: [".ts", ".rs", ".py"],
@@ -94,7 +95,8 @@ vi.mock("better-sqlite3", () => ({
 }));
 
 vi.mock("../src/scanning/file-walker.ts", () => ({
-  walkDirectory: mocks.walkDirectory,
+  commonDirectory: mocks.commonDirectory,
+  walkDirectories: mocks.walkDirectories,
 }));
 
 vi.mock("../src/scanning/multi-language-parser.ts", () => ({
@@ -119,6 +121,7 @@ vi.mock("../src/pipeline.ts", () => ({
 
 describe("main", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     process.exitCode = undefined;
     mocks.MockDatabase.instances.length = 0;
     mocks.hashStores.length = 0;
@@ -163,7 +166,7 @@ describe("main", () => {
       mocks.MockDatabase.instances[0],
     );
     expect(mocks.createSqliteHashStore).toHaveBeenCalledWith(mocks.MockDatabase.instances[0]);
-    expect(mocks.walkDirectory).toHaveBeenCalledWith(expect.any(String), [".ts", ".rs", ".py"]);
+    expect(mocks.walkDirectories).toHaveBeenCalledWith([expect.any(String)], [".ts", ".rs", ".py"]);
     expect(mocks.runPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
         store: mocks.indexStores[0],
@@ -175,5 +178,20 @@ describe("main", () => {
     expect(mocks.hashStores[0].close).toHaveBeenCalledTimes(1);
     expect(mocks.MockDatabase.instances[0].close).toHaveBeenCalledTimes(1);
     expect(mocks.MockDatabase.instances[0].open).toBe(false);
+  });
+
+  it("accepts repeated directory arguments and scans them together", async () => {
+    await main(["--dir", "packages/a", "--dir", "packages/b"]);
+
+    expect(process.exitCode).toBeUndefined();
+    expect(mocks.walkDirectories).toHaveBeenCalledWith(
+      [expect.stringContaining("packages/a"), expect.stringContaining("packages/b")],
+      [".ts", ".rs", ".py"],
+    );
+    expect(mocks.runPipeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        files: [],
+      }),
+    );
   });
 });
