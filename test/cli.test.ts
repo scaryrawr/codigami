@@ -50,6 +50,7 @@ const mocks = vi.hoisted(() => {
     mkdir: vi.fn(async () => {}),
     writeFile: vi.fn(async () => {}),
     parserInit: vi.fn(async () => {}),
+    commonDirectory: vi.fn((paths: string[]) => paths[0] ?? "."),
     walkDirectories: vi.fn(async () => []),
     createDefaultLanguageParser: vi.fn(async () => ({
       language: "multi",
@@ -94,6 +95,7 @@ vi.mock("better-sqlite3", () => ({
 }));
 
 vi.mock("../src/scanning/file-walker.ts", () => ({
+  commonDirectory: mocks.commonDirectory,
   walkDirectories: mocks.walkDirectories,
 }));
 

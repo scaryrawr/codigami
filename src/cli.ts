@@ -1,9 +1,9 @@
 import { parseArgs } from "node:util";
-import { dirname, resolve, sep } from "node:path";
+import { dirname, resolve } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { Parser } from "web-tree-sitter";
 import Database from "better-sqlite3";
-import { walkDirectories } from "./scanning/file-walker.ts";
+import { commonDirectory, walkDirectories } from "./scanning/file-walker.ts";
 import { createDefaultLanguageParser } from "./scanning/multi-language-parser.ts";
 import { createOpenAIEmbeddingProvider } from "./embedding/openai-embedding-provider.ts";
 import { createSqliteStoreFromDatabase } from "./indexing/sqlite-store.ts";
@@ -14,23 +14,6 @@ import { CodigamiError, type FileHashStore, type IndexStore } from "./types.ts";
 const DEFAULT_ENDPOINT = "http://localhost:14982/v1";
 const DEFAULT_MODEL = "jina-code-embeddings-1.5b-mlx";
 const DEFAULT_THRESHOLD = 0.8;
-
-const commonDirectory = (paths: string[]): string => {
-  const [firstPath, ...rest] = paths;
-  if (firstPath === undefined) return resolve(".");
-
-  const commonParts = firstPath.split(sep);
-  for (const path of rest) {
-    const parts = path.split(sep);
-    let idx = 0;
-    while (idx < commonParts.length && idx < parts.length && commonParts[idx] === parts[idx]) {
-      idx++;
-    }
-    commonParts.length = idx;
-  }
-
-  return commonParts.join(sep) || sep;
-};
 
 const parseThreshold = (value: string): number | undefined => {
   const trimmed = value.trim();

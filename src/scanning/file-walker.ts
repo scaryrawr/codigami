@@ -12,7 +12,7 @@ const SKIP_DIRS = new Set(["node_modules", ".git"]);
 
 const isHidden = (name: string): boolean => name.startsWith(".");
 
-const commonDirectory = (paths: string[]): string => {
+export const commonDirectory = (paths: string[]): string => {
   const [firstPath, ...rest] = paths;
   if (firstPath === undefined) {
     throw new CodigamiError("At least one directory is required");
