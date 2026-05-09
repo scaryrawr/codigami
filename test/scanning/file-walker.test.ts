@@ -1,9 +1,9 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { walkDirectories, walkDirectory } from "../../src/scanning/file-walker.ts";
+import { commonDirectory, walkDirectories, walkDirectory } from "../../src/scanning/file-walker.ts";
 import { CodigamiError } from "../../src/types.ts";
 
 describe("walkDirectory", () => {
@@ -137,5 +137,23 @@ describe("walkDirectory", () => {
     const files = await walkDirectories([join(root, "src"), join(root, "src", "lib")], [".ts"]);
 
     expect(files.map((f) => f.relativePath)).toEqual([join("lib", "helper.ts")]);
+  });
+});
+
+describe("commonDirectory", () => {
+  it("returns the only path for single path input", () => {
+    const path = resolve("packages", "a");
+
+    expect(commonDirectory([path])).toBe(path);
+  });
+
+  it("returns the deepest shared parent for sibling paths", () => {
+    const parent = resolve("packages");
+
+    expect(commonDirectory([join(parent, "a"), join(parent, "b")])).toBe(parent);
+  });
+
+  it("returns the root when paths share no directory below it", () => {
+    expect(commonDirectory([`${sep}repo-a`, `${sep}repo-b`])).toBe(sep);
   });
 });
