@@ -35,7 +35,7 @@ Core modules:
 | `src/matching`    | Cosine similarity, duplicate pair detection, and union-find clustering                                  |
 | `src/output`      | JSON report formatting                                                                                  |
 
-Keep each module focused on one responsibility. Prefer narrow interfaces and dependency injection over direct imports between modules; the CLI is the main composition root for concrete providers and stores.
+Keep each module focused on one responsibility. Prefer narrow interfaces and dependency injection over direct imports between modules; the CLI is the main composition root for concrete providers and stores. The package publishes from `dist/`; edit `src/` and let `npm run build` generate output.
 
 ## TDD
 
@@ -60,6 +60,7 @@ Keep each module focused on one responsibility. Prefer narrow interfaces and dep
 - **File naming** — kebab-case for modules (e.g., `embedding-provider.ts`), PascalCase for interfaces and types.
 - **Error handling** — throw typed errors (`CodigamiError`) with a message and optional context; never swallow errors silently.
 - **Public API surface** — expose consumer-facing APIs from `src/index.ts`; keep internals unexported unless tests or downstream users need them.
+- **Parser cache keys** — when parser or extractor semantics change, update the relevant `cacheKey` constant so incremental scans reprocess affected files.
 
 ## Safety
 
