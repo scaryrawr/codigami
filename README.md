@@ -32,6 +32,7 @@ The CLI walks the target directory and discovers files matching these extensions
 - C: `.c`
 - Zig: `.zig`
 - Go: `.go`
+- Bash: `.sh`, `.bash`
 - Python: `.py`
 
 The walker skips `node_modules`, `.git`, hidden files, and hidden directories.
@@ -45,6 +46,7 @@ Discovered files are parsed with [web-tree-sitter](https://github.com/tree-sitte
 - C++ function definitions and class/struct specifiers, including inline method bodies
 - Zig functions and struct declarations assigned to variables
 - Go functions and methods
+- Bash functions
 - Python functions, classes, and methods inside classes
 
 Each unit includes:
