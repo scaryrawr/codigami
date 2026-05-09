@@ -84,12 +84,13 @@ export const walkDirectories = async (
   rootDirs: string[],
   extensions: string[],
 ): Promise<DiscoveredFile[]> => {
-  if (rootDirs.length === 0) {
+  const [rootDir] = rootDirs;
+  if (rootDir === undefined) {
     throw new CodigamiError("At least one directory is required");
   }
 
   if (rootDirs.length === 1) {
-    return walkDirectory(rootDirs[0]!, extensions);
+    return walkDirectory(rootDir, extensions);
   }
 
   const resolvedRootDirs = rootDirs.map((rootDir) => resolve(rootDir));
