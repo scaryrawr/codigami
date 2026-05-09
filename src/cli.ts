@@ -1,9 +1,9 @@
 import { parseArgs } from "node:util";
-import { resolve } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { Parser } from "web-tree-sitter";
 import Database from "better-sqlite3";
-import { walkDirectory } from "./scanning/file-walker.ts";
+import { walkDirectories } from "./scanning/file-walker.ts";
 import { createDefaultLanguageParser } from "./scanning/multi-language-parser.ts";
 import { createOpenAIEmbeddingProvider } from "./embedding/openai-embedding-provider.ts";
 import { createSqliteStoreFromDatabase } from "./indexing/sqlite-store.ts";
@@ -14,6 +14,24 @@ import { CodigamiError, type FileHashStore, type IndexStore } from "./types.ts";
 const DEFAULT_ENDPOINT = "http://localhost:14982/v1";
 const DEFAULT_MODEL = "jina-code-embeddings-1.5b-mlx";
 const DEFAULT_THRESHOLD = 0.8;
+
+const commonDirectory = (paths: string[]): string => {
+  const [firstPath, ...rest] = paths;
+  if (firstPath === undefined) return resolve(".");
+
+  const commonParts = firstPath.split(sep);
+  for (const path of rest) {
+    const parts = path.split(sep);
+    let idx = 0;
+    while (idx < commonParts.length && idx < parts.length && commonParts[idx] === parts[idx]) {
+      idx++;
+    }
+    commonParts.length = idx;
+  }
+
+  return commonParts.join(sep) || sep;
+};
+
 const parseThreshold = (value: string): number | undefined => {
   const trimmed = value.trim();
   if (trimmed === "") return undefined;
@@ -28,7 +46,7 @@ export const main = async (argv: string[] = process.argv.slice(2)): Promise<void
   const { values } = parseArgs({
     args: argv,
     options: {
-      dir: { type: "string", short: "d", default: "." },
+      dir: { type: "string", short: "d", multiple: true },
       endpoint: { type: "string", short: "e", default: DEFAULT_ENDPOINT },
       model: { type: "string", short: "m", default: DEFAULT_MODEL },
       threshold: { type: "string", short: "t", default: String(DEFAULT_THRESHOLD) },
@@ -46,7 +64,7 @@ export const main = async (argv: string[] = process.argv.slice(2)): Promise<void
 Usage: codigami [options]
 
 Options:
-  -d, --dir <path>        Directory to scan (default: ".")
+  -d, --dir <path>        Directory to scan; repeat to scan multiple directories (default: ".")
   -e, --endpoint <url>    OpenAI-compatible embedding endpoint
   -m, --model <name>      Embedding model name
   -t, --threshold <n>     Similarity threshold 0.0-1.0 (default: ${DEFAULT_THRESHOLD})
@@ -57,7 +75,7 @@ Options:
     return;
   }
 
-  const directory = resolve(values.dir!);
+  const directories = (values.dir ?? ["."]).map((dir) => resolve(dir));
   const threshold = parseThreshold(values.threshold!);
   if (threshold === undefined) {
     console.error(
@@ -67,10 +85,11 @@ Options:
     return;
   }
 
-  const dbPath = values.db || resolve(directory, ".codigami", "index.db");
+  const defaultDbDirectory = directories.length === 1 ? directories[0]! : commonDirectory(directories);
+  const dbPath = values.db || resolve(defaultDbDirectory, ".codigami", "index.db");
 
   // Ensure .codigami directory exists
-  const dbDir = resolve(dbPath, "..");
+  const dbDir = dirname(dbPath);
   await mkdir(dbDir, { recursive: true });
 
   // Initialize tree-sitter
@@ -93,7 +112,7 @@ Options:
       hashStore = createSqliteHashStore(database);
     }
 
-    const files = await walkDirectory(directory, [...parser.extensions]);
+    const files = await walkDirectories(directories, [...parser.extensions]);
     console.error(`Found ${files.length} file(s) to scan...`);
 
     const report = await runPipeline({

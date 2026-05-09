@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { walkDirectory } from "../../src/scanning/file-walker.ts";
+import { walkDirectories, walkDirectory } from "../../src/scanning/file-walker.ts";
 import { CodigamiError } from "../../src/types.ts";
 
 describe("walkDirectory", () => {
@@ -111,5 +111,31 @@ describe("walkDirectory", () => {
     const files = await walkDirectory(root, [".ts", ".css"]);
 
     expect(files.map((f) => f.relativePath)).toEqual(["app.ts", "style.css"]);
+  });
+
+  it("walks multiple directories together with distinct relative paths", async () => {
+    await mkdir(join(root, "packages", "a", "src"), { recursive: true });
+    await mkdir(join(root, "packages", "b", "src"), { recursive: true });
+    await writeFile(join(root, "packages", "a", "src", "index.ts"), "");
+    await writeFile(join(root, "packages", "b", "src", "index.ts"), "");
+
+    const files = await walkDirectories(
+      [join(root, "packages", "a"), join(root, "packages", "b")],
+      [".ts"],
+    );
+
+    expect(files.map((f) => f.relativePath)).toEqual([
+      join("a", "src", "index.ts"),
+      join("b", "src", "index.ts"),
+    ]);
+  });
+
+  it("deduplicates files when directories overlap", async () => {
+    await mkdir(join(root, "src", "lib"), { recursive: true });
+    await writeFile(join(root, "src", "lib", "helper.ts"), "");
+
+    const files = await walkDirectories([join(root, "src"), join(root, "src", "lib")], [".ts"]);
+
+    expect(files.map((f) => f.relativePath)).toEqual([join("src", "lib", "helper.ts")]);
   });
 });
