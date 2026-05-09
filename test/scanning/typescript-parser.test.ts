@@ -81,6 +81,18 @@ describe("createTypescriptParser", () => {
   });
 
   describe("class declarations", () => {
+    it("assigns unique IDs when a class and method share a line range", async () => {
+      const source = "class Calculator { add(a: number, b: number): number { return a + b; } }";
+      const units = await parser.parse("compact.ts", source);
+      const ids = units.map((unit) => unit.id);
+
+      expect(units.map((unit) => [unit.unitType, unit.name])).toEqual([
+        ["class_declaration", "Calculator"],
+        ["method_definition", "add"],
+      ]);
+      expect(new Set(ids).size).toBe(ids.length);
+    });
+
     it("extracts a class and its methods", async () => {
       const source = [
         "class Calculator {",
@@ -118,6 +130,18 @@ describe("createTypescriptParser", () => {
     });
   });
 
+  describe("JSX syntax", () => {
+    it.each([
+      ["component.tsx", "export function Component() { return <div>Hello</div>; }"],
+      ["component.jsx", "export const Component = () => <div>Hello</div>;"],
+    ])("extracts a component from %s", async (filePath, source) => {
+      const units = await parser.parse(filePath, source);
+
+      expect(units).toHaveLength(1);
+      expect(units[0].name).toBe("Component");
+    });
+  });
+
   describe("exported declarations", () => {
     it("extracts an exported function", async () => {
       const source = `export function doWork(): void {}`;
@@ -129,13 +153,9 @@ describe("createTypescriptParser", () => {
     });
 
     it("extracts an exported class with methods", async () => {
-      const source = [
-        "export class Service {",
-        "  run() {",
-        "    return true;",
-        "  }",
-        "}",
-      ].join("\n");
+      const source = ["export class Service {", "  run() {", "    return true;", "  }", "}"].join(
+        "\n",
+      );
 
       const units = await parser.parse("service.ts", source);
 
@@ -192,7 +212,7 @@ describe("createTypescriptParser", () => {
 
   describe("source text", () => {
     it("captures the full source text of each unit", async () => {
-      const fnSource = "function hello() {\n  console.log(\"hi\");\n}";
+      const fnSource = 'function hello() {\n  console.log("hi");\n}';
       const source = `const x = 1;\n${fnSource}\nconst y = 2;`;
       const units = await parser.parse("source.ts", source);
 

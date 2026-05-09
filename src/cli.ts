@@ -4,7 +4,7 @@ import { mkdir } from "node:fs/promises";
 import { Parser } from "web-tree-sitter";
 import Database from "better-sqlite3";
 import { walkDirectory } from "./scanning/file-walker.ts";
-import { createTypescriptParser } from "./scanning/typescript-parser.ts";
+import { createDefaultLanguageParser } from "./scanning/multi-language-parser.ts";
 import { createOpenAIEmbeddingProvider } from "./embedding/openai-embedding-provider.ts";
 import { createSqliteStoreFromDatabase } from "./indexing/sqlite-store.ts";
 import { createSqliteHashStore } from "./indexing/sqlite-hash-store.ts";
@@ -14,8 +14,6 @@ import { CodigamiError, type FileHashStore, type IndexStore } from "./types.ts";
 const DEFAULT_ENDPOINT = "http://localhost:14982/v1";
 const DEFAULT_MODEL = "jina-code-embeddings-1.5b-mlx";
 const DEFAULT_THRESHOLD = 0.8;
-const DEFAULT_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx"];
-
 const parseThreshold = (value: string): number | undefined => {
   const trimmed = value.trim();
   if (trimmed === "") return undefined;
@@ -78,7 +76,7 @@ Options:
   // Initialize tree-sitter
   await Parser.init();
 
-  const parser = await createTypescriptParser();
+  const parser = await createDefaultLanguageParser();
   const embeddingProvider = createOpenAIEmbeddingProvider({
     baseURL: values.endpoint!,
     model: values.model!,
@@ -95,7 +93,7 @@ Options:
       hashStore = createSqliteHashStore(database);
     }
 
-    const files = await walkDirectory(directory, DEFAULT_EXTENSIONS);
+    const files = await walkDirectory(directory, [...parser.extensions]);
     console.error(`Found ${files.length} file(s) to scan...`);
 
     const report = await runPipeline({

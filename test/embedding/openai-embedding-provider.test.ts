@@ -3,9 +3,7 @@ import OpenAI from "openai";
 import { CodigamiError } from "../../src/types.ts";
 import { createOpenAIEmbeddingProvider } from "../../src/embedding/openai-embedding-provider.ts";
 
-const makeClient = (
-  createFn: OpenAI.Embeddings["create"],
-): OpenAI =>
+const makeClient = (createFn: OpenAI.Embeddings["create"]): OpenAI =>
   ({ embeddings: { create: createFn } }) as unknown as OpenAI;
 
 describe("createOpenAIEmbeddingProvider", () => {
@@ -46,9 +44,7 @@ describe("createOpenAIEmbeddingProvider", () => {
     const provider = createOpenAIEmbeddingProvider(config, makeClient(create));
 
     await expect(provider.embed(["test"])).rejects.toThrow(CodigamiError);
-    await expect(provider.embed(["test"])).rejects.toThrow(
-      "Embedding request failed",
-    );
+    await expect(provider.embed(["test"])).rejects.toThrow("Embedding request failed");
   });
 
   it("passes the configured model to the API", async () => {
@@ -56,10 +52,7 @@ describe("createOpenAIEmbeddingProvider", () => {
       data: [{ embedding: [1, 2] }],
     });
     const customConfig = { ...config, model: "text-embedding-3-small" };
-    const provider = createOpenAIEmbeddingProvider(
-      customConfig,
-      makeClient(create),
-    );
+    const provider = createOpenAIEmbeddingProvider(customConfig, makeClient(create));
 
     await provider.embed(["test"]);
 

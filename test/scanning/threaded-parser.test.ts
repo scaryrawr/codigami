@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Parser } from "web-tree-sitter";
-import { createThreadedTypescriptParser, type ThreadedLanguageParser } from "../../src/scanning/threaded-parser.ts";
+import {
+  createThreadedTypescriptParser,
+  type ThreadedLanguageParser,
+} from "../../src/scanning/threaded-parser.ts";
 import { createTypescriptParser } from "../../src/scanning/typescript-parser.ts";
 import type { LanguageParser } from "../../src/types.ts";
 
@@ -65,6 +68,16 @@ describe("createThreadedTypescriptParser", () => {
     const methods = units.filter((u) => u.unitType === "method_definition");
     expect(methods).toHaveLength(1);
     expect(methods[0].name).toBe("add");
+  });
+
+  it("extracts JSX syntax from TSX files", async () => {
+    const units = await threadedParser.parse(
+      "component.tsx",
+      "export function Component() { return <div>Hello</div>; }",
+    );
+
+    expect(units).toHaveLength(1);
+    expect(units[0].name).toBe("Component");
   });
 
   it("returns empty array for non-extractable source", async () => {

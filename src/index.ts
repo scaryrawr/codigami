@@ -15,6 +15,13 @@ export { makeUnitId } from "./types.ts";
 export { walkDirectory } from "./scanning/file-walker.ts";
 export type { DiscoveredFile } from "./scanning/file-walker.ts";
 export { createTypescriptParser } from "./scanning/typescript-parser.ts";
+export {
+  createDefaultLanguageParser,
+  createMultiLanguageParser,
+  DEFAULT_LANGUAGE_DEFINITIONS,
+  DEFAULT_LANGUAGE_EXTENSIONS,
+} from "./scanning/multi-language-parser.ts";
+export type { TreeSitterLanguageDefinition } from "./scanning/multi-language-parser.ts";
 
 export { createOpenAIEmbeddingProvider } from "./embedding/openai-embedding-provider.ts";
 export type { OpenAIEmbeddingConfig } from "./embedding/openai-embedding-provider.ts";

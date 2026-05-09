@@ -52,32 +52,35 @@ interface NormalizedSearchOptions {
 }
 
 const normalizeSearchOptions = (options: DuplicatePairSearchOptions): NormalizedSearchOptions => ({
-  exhaustiveSearchLimit: normalizeNonNegativeInteger(
+  exhaustiveSearchLimit: normalizeIntegerAtLeast(
     options.exhaustiveSearchLimit,
     DEFAULT_EXHAUSTIVE_SEARCH_LIMIT,
+    0,
   ),
-  maxCandidatesPerUnit: normalizePositiveInteger(
+  maxCandidatesPerUnit: normalizeIntegerAtLeast(
     options.maxCandidatesPerUnit,
     DEFAULT_MAX_CANDIDATES_PER_UNIT,
+    1,
   ),
-  signatureDimensions: normalizePositiveInteger(
+  signatureDimensions: normalizeIntegerAtLeast(
     options.signatureDimensions,
     DEFAULT_SIGNATURE_DIMENSIONS,
+    1,
   ),
-  signatureBandSize: normalizePositiveInteger(
+  signatureBandSize: normalizeIntegerAtLeast(
     options.signatureBandSize,
     DEFAULT_SIGNATURE_BAND_SIZE,
+    1,
   ),
 });
 
-const normalizeNonNegativeInteger = (value: number | undefined, fallback: number): number => {
+const normalizeIntegerAtLeast = (
+  value: number | undefined,
+  fallback: number,
+  minimum: number,
+): number => {
   if (value === undefined) return fallback;
-  return Number.isInteger(value) && value >= 0 ? value : fallback;
-};
-
-const normalizePositiveInteger = (value: number | undefined, fallback: number): number => {
-  if (value === undefined) return fallback;
-  return Number.isInteger(value) && value > 0 ? value : fallback;
+  return Number.isInteger(value) && value >= minimum ? value : fallback;
 };
 
 const findDuplicatePairsExhaustive = (

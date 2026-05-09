@@ -53,7 +53,10 @@ export const createParserPool = (options?: ParserPoolOptions): Promise<ParserPoo
     available.worker.postMessage(queued.request);
   };
 
-  const handleMessage = (poolWorker: PoolWorker, msg: ParseResponse & { ready?: boolean; initError?: string }): void => {
+  const handleMessage = (
+    poolWorker: PoolWorker,
+    msg: ParseResponse & { ready?: boolean; initError?: string },
+  ): void => {
     if (msg.ready) {
       poolWorker.ready = true;
       dispatch();
@@ -129,9 +132,7 @@ export const createParserPool = (options?: ParserPoolOptions): Promise<ParserPoo
       }
       taskQueue.length = 0;
 
-      await Promise.all(
-        workers.map((w) => w.worker.terminate()),
-      );
+      await Promise.all(workers.map((w) => w.worker.terminate()));
     },
   }));
 };

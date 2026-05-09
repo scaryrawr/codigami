@@ -1,28 +1,28 @@
-import { createRequire } from "node:module";
-import { Language, Parser } from "web-tree-sitter";
 import { type CodeUnit, type LanguageParser } from "../types.ts";
+import { createLazyTypescriptParserLoader } from "./typescript-parser-loader.ts";
 import { extractCodeUnitsFromRootNode } from "./typescript-unit-extractor.ts";
 
-const require = createRequire(import.meta.url);
+export const TYPESCRIPT_PARSER_CACHE_KEY = "typescript-parser:v2:tsx-grammar:unique-unit-ids";
 
 export const createTypescriptParser = async (): Promise<LanguageParser> => {
-  const tsWasmPath = require.resolve("tree-sitter-typescript/tree-sitter-typescript.wasm");
-  const tsLanguage = await Language.load(tsWasmPath);
-
-  const tsParser = new Parser();
-  tsParser.setLanguage(tsLanguage);
-
+  const parserLoader = createLazyTypescriptParserLoader();
   const lang = "typescript";
 
   return {
     language: lang,
     extensions: [".ts", ".tsx", ".js", ".jsx"] as const,
+    cacheKey: TYPESCRIPT_PARSER_CACHE_KEY,
 
     async parse(filePath: string, source: string): Promise<CodeUnit[]> {
-      const tree = tsParser.parse(source);
+      const parser = await parserLoader.getParserForFilePath(filePath);
+      const tree = parser.parse(source);
       if (!tree) return [];
 
-      return extractCodeUnitsFromRootNode(tree.rootNode, filePath, lang);
+      try {
+        return extractCodeUnitsFromRootNode(tree.rootNode, filePath, lang);
+      } finally {
+        tree.delete();
+      }
     },
   };
 };

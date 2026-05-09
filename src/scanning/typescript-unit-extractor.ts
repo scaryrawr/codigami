@@ -1,5 +1,6 @@
 import type { Node } from "web-tree-sitter";
 import { type CodeUnit, makeUnitId } from "../types.ts";
+import { ensureUniqueCodeUnitIds } from "./tree-sitter-unit-extractor.ts";
 
 const EXTRACTABLE_TOP_LEVEL = new Set([
   "function_declaration",
@@ -153,5 +154,5 @@ export const extractCodeUnitsFromRootNode = (
     }
   }
 
-  return units;
+  return ensureUniqueCodeUnitIds(units);
 };

@@ -9,6 +9,7 @@ import {
   type LanguageParser,
 } from "../src/types.ts";
 import { runPipeline, type PipelineProgress } from "../src/pipeline.ts";
+import { hashContent } from "../src/scanning/file-change-detector.ts";
 import { createHash } from "node:crypto";
 
 const makeUnit = (id: string, name: string, source: string): CodeUnit => ({
@@ -470,6 +471,48 @@ describe("runPipeline", () => {
 
       expect(mockParser.parse).toHaveBeenCalled();
       expect(mockEmbeddingProvider.embed).toHaveBeenCalled();
+    });
+
+    it("reprocesses unchanged content when the parser cache key changes", async () => {
+      const content = "source code";
+      const rawContentHash = sha256(content);
+      const parserWithCacheKey: LanguageParser = {
+        ...mockParser,
+        cacheKey: "parser-rules-v2",
+        parse: vi.fn(async () => [unitA, unitB, unitC]),
+      };
+      const hashStore = createMockHashStore(new Map([["test.ts", rawContentHash]]));
+
+      await runPipeline({
+        files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],
+        parser: parserWithCacheKey,
+        embeddingProvider: mockEmbeddingProvider,
+        store: mockStore,
+        threshold: 0.8,
+        hashStore,
+        readFile: createMockFileReader(new Map([["/abs/test.ts", content]])),
+      });
+
+      expect(parserWithCacheKey.parse).toHaveBeenCalledTimes(1);
+      expect(hashStore.setHash).toHaveBeenCalledWith(
+        "test.ts",
+        hashContent(content, "parser-rules-v2"),
+      );
+
+      vi.clearAllMocks();
+
+      await runPipeline({
+        files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],
+        parser: parserWithCacheKey,
+        embeddingProvider: mockEmbeddingProvider,
+        store: mockStore,
+        threshold: 0.8,
+        hashStore,
+        readFile: createMockFileReader(new Map([["/abs/test.ts", content]])),
+      });
+
+      expect(parserWithCacheKey.parse).not.toHaveBeenCalled();
+      expect(mockEmbeddingProvider.embed).not.toHaveBeenCalled();
     });
 
     it("prunes deleted files from store and hash store", async () => {

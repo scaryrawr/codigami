@@ -24,16 +24,16 @@ The project is a TypeScript ESM library and CLI that scans codebases and surface
 
 Core modules:
 
-| Module | Responsibility |
-|---|---|
-| `src/cli.ts` | CLI argument parsing, default wiring, progress output, lifecycle cleanup |
+| Module            | Responsibility                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| `src/cli.ts`      | CLI argument parsing, default wiring, progress output, lifecycle cleanup                                |
 | `src/pipeline.ts` | Orchestrates discovery results, parsing, batching, embedding, indexing, matching, and report formatting |
-| `src/types.ts` | Shared public interfaces and `CodigamiError` |
-| `src/scanning` | File discovery, file hashing, tree-sitter parsing, and optional worker-thread parser pool |
-| `src/embedding` | OpenAI-compatible embedding provider abstraction |
-| `src/indexing` | SQLite stores for code units, embeddings, and file hashes |
-| `src/matching` | Cosine similarity, duplicate pair detection, and union-find clustering |
-| `src/output` | JSON report formatting |
+| `src/types.ts`    | Shared public interfaces and `CodigamiError`                                                            |
+| `src/scanning`    | File discovery, file hashing, tree-sitter parsing, and optional worker-thread parser pool               |
+| `src/embedding`   | OpenAI-compatible embedding provider abstraction                                                        |
+| `src/indexing`    | SQLite stores for code units, embeddings, and file hashes                                               |
+| `src/matching`    | Cosine similarity, duplicate pair detection, and union-find clustering                                  |
+| `src/output`      | JSON report formatting                                                                                  |
 
 Keep each module focused on one responsibility. Prefer narrow interfaces and dependency injection over direct imports between modules; the CLI is the main composition root for concrete providers and stores.
 

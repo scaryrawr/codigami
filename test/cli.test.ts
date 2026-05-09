@@ -51,9 +51,9 @@ const mocks = vi.hoisted(() => {
     writeFile: vi.fn(async () => {}),
     parserInit: vi.fn(async () => {}),
     walkDirectory: vi.fn(async () => []),
-    createTypescriptParser: vi.fn(async () => ({
-      language: "typescript",
-      extensions: [".ts"],
+    createDefaultLanguageParser: vi.fn(async () => ({
+      language: "multi",
+      extensions: [".ts", ".rs", ".py"],
       parse: vi.fn(),
     })),
     createOpenAIEmbeddingProvider: vi.fn(() => ({ embed: vi.fn() })),
@@ -97,8 +97,8 @@ vi.mock("../src/scanning/file-walker.ts", () => ({
   walkDirectory: mocks.walkDirectory,
 }));
 
-vi.mock("../src/scanning/typescript-parser.ts", () => ({
-  createTypescriptParser: mocks.createTypescriptParser,
+vi.mock("../src/scanning/multi-language-parser.ts", () => ({
+  createDefaultLanguageParser: mocks.createDefaultLanguageParser,
 }));
 
 vi.mock("../src/embedding/openai-embedding-provider.ts", () => ({
@@ -163,6 +163,7 @@ describe("main", () => {
       mocks.MockDatabase.instances[0],
     );
     expect(mocks.createSqliteHashStore).toHaveBeenCalledWith(mocks.MockDatabase.instances[0]);
+    expect(mocks.walkDirectory).toHaveBeenCalledWith(expect.any(String), [".ts", ".rs", ".py"]);
     expect(mocks.runPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
         store: mocks.indexStores[0],

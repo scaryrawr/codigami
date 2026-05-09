@@ -79,7 +79,12 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
   // Determine which files need processing
   let filesToProcess: DiscoveredFile[];
   if (hashStore) {
-    const changes = await detectFileChanges({ files, hashStore, readFile });
+    const changes = await detectFileChanges({
+      files,
+      hashStore,
+      readFile,
+      cacheKey: parser.cacheKey,
+    });
     filesToProcess = changes.changed;
 
     // Prune deleted files from index and hash store
@@ -214,7 +219,7 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
     for (const { file, source, units } of results) {
       const state: ParsedFileState = {
         filePath: file.relativePath,
-        sourceHash: hashStore ? hashContent(source) : undefined,
+        sourceHash: hashStore ? hashContent(source, parser.cacheKey) : undefined,
         units,
         embeddings: new Map(),
         remainingEmbeddings: units.length,

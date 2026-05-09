@@ -4,11 +4,11 @@
   "description": "Delete, delete, delete",
   "license": "MIT",
   "author": "Mike Wallio",
-  "type": "module",
-  "main": "dist/index.js",
   "bin": {
     "codigami": "bin/codigami.js"
   },
+  "type": "module",
+  "main": "dist/index.js",
   "scripts": {
     "typecheck": "tsgo --noEmit",
     "build": "tsgo",
@@ -19,17 +19,24 @@
     "fmt": "oxfmt .",
     "fmt:check": "oxfmt . --check"
   },
+  "dependencies": {
+    "@tree-sitter-grammars/tree-sitter-zig": "^1.1.2",
+    "better-sqlite3": "^12.9.0",
+    "openai": "^6.37.0",
+    "tree-sitter-c": "^0.24.1",
+    "tree-sitter-c-sharp": "^0.23.5",
+    "tree-sitter-cpp": "^0.23.4",
+    "tree-sitter-go": "^0.25.0",
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-rust": "^0.24.0",
+    "tree-sitter-typescript": "^0.23.2",
+    "web-tree-sitter": "^0.26.8"
+  },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@typescript/native-preview": "^7.0.0-dev.20260508.1",
     "oxfmt": "^0.48.0",
     "oxlint": "^1.63.0",
     "vitest": "^4.1.5"
-  },
-  "dependencies": {
-    "better-sqlite3": "^12.9.0",
-    "openai": "^6.37.0",
-    "tree-sitter-typescript": "^0.23.2",
-    "web-tree-sitter": "^0.26.8"
   }
 }

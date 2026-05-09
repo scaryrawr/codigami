@@ -16,6 +16,11 @@ export interface CodeUnit {
 export interface LanguageParser {
   readonly language: string;
   readonly extensions: readonly string[];
+  /**
+   * Versioned parser/extractor signature used to invalidate persisted file hashes
+   * when parsing semantics change without source file changes.
+   */
+  readonly cacheKey?: string;
   parse(filePath: string, source: string): Promise<CodeUnit[]>;
 }
 

@@ -87,9 +87,7 @@ describe("walkDirectory", () => {
   it("throws CodigamiError for non-existent directory", async () => {
     const badPath = join(root, "does-not-exist");
 
-    await expect(walkDirectory(badPath, [".ts"])).rejects.toThrow(
-      CodigamiError,
-    );
+    await expect(walkDirectory(badPath, [".ts"])).rejects.toThrow(CodigamiError);
   });
 
   it("returns results sorted by relative path", async () => {
