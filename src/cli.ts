@@ -85,7 +85,8 @@ Options:
     return;
   }
 
-  const defaultDbDirectory = directories.length === 1 ? directories[0]! : commonDirectory(directories);
+  const defaultDbDirectory =
+    directories.length === 1 ? directories[0]! : commonDirectory(directories);
   const dbPath = values.db || resolve(defaultDbDirectory, ".codigami", "index.db");
 
   // Ensure .codigami directory exists

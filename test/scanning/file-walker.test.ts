@@ -136,6 +136,6 @@ describe("walkDirectory", () => {
 
     const files = await walkDirectories([join(root, "src"), join(root, "src", "lib")], [".ts"]);
 
-    expect(files.map((f) => f.relativePath)).toEqual([join("src", "lib", "helper.ts")]);
+    expect(files.map((f) => f.relativePath)).toEqual([join("lib", "helper.ts")]);
   });
 });
