@@ -1,5 +1,7 @@
+import { execFile } from "node:child_process";
 import { readdir, stat } from "node:fs/promises";
 import { extname, join, relative, resolve, sep } from "node:path";
+import { promisify } from "node:util";
 
 import { CodigamiError } from "../types.ts";
 
@@ -10,7 +12,60 @@ export interface DiscoveredFile {
 
 const SKIP_DIRS = new Set(["node_modules", ".git"]);
 
+const execFileAsync = promisify(execFile);
+
 const isHidden = (name: string): boolean => name.startsWith(".");
+
+const isExitCode = (error: unknown, code: number): boolean => {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return false;
+  }
+
+  return (error as { code?: unknown }).code === code;
+};
+
+const createGitIgnoreChecker = async (rootDir: string): Promise<(path: string) => Promise<boolean>> => {
+  let repositoryRoot: string;
+
+  try {
+    const { stdout } = await execFileAsync("git", ["-C", rootDir, "rev-parse", "--show-toplevel"]);
+    repositoryRoot = stdout.trim();
+  } catch {
+    return async () => false;
+  }
+
+  const ignoredPaths = new Map<string, boolean>();
+
+  return async (path: string): Promise<boolean> => {
+    const relativePath = relative(repositoryRoot, path).split(sep).join("/");
+    const cached = ignoredPaths.get(relativePath);
+    if (cached !== undefined) return cached;
+
+    try {
+      await execFileAsync("git", [
+        "-C",
+        repositoryRoot,
+        "check-ignore",
+        "--quiet",
+        "--no-index",
+        "--",
+        relativePath,
+      ]);
+      ignoredPaths.set(relativePath, true);
+      return true;
+    } catch (error) {
+      if (isExitCode(error, 1)) {
+        ignoredPaths.set(relativePath, false);
+        return false;
+      }
+
+      throw new CodigamiError("Failed to evaluate gitignore rules", {
+        path,
+        cause: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+};
 
 export const commonDirectory = (paths: string[]): string => {
   const [firstPath, ...rest] = paths;
@@ -46,6 +101,7 @@ const walkDirectoryFromBase = async (
 
   const extSet = new Set(extensions);
   const results: DiscoveredFile[] = [];
+  const isGitIgnored = await createGitIgnoreChecker(rootDir);
 
   const walk = async (dir: string): Promise<void> => {
     const entries = await readdir(dir, { withFileTypes: true });
@@ -55,6 +111,7 @@ const walkDirectoryFromBase = async (
       if (SKIP_DIRS.has(entry.name)) continue;
 
       const absolutePath = join(dir, entry.name);
+      if (await isGitIgnored(absolutePath)) continue;
 
       if (entry.isDirectory()) {
         await walk(absolutePath);
