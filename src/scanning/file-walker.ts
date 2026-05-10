@@ -11,12 +11,13 @@ export interface DiscoveredFile {
 }
 
 const SKIP_DIRS = new Set(["node_modules", ".git"]);
+const GIT_CHECK_IGNORE_BATCH_SIZE = 500;
 
 const execFileAsync = promisify(execFile);
 
 const isHidden = (name: string): boolean => name.startsWith(".");
 
-const hasExitCode = (error: unknown, code: number): boolean => {
+const hasExactExitCode = (error: unknown, code: number): boolean => {
   if (typeof error !== "object" || error === null || !("code" in error)) {
     return false;
   }
@@ -24,7 +25,7 @@ const hasExitCode = (error: unknown, code: number): boolean => {
   return (error as { code?: unknown }).code === code;
 };
 
-const describeProcessError = (error: unknown): string => {
+const formatErrorDetails = (error: unknown): string => {
   if (typeof error !== "object" || error === null) {
     return String(error);
   }
@@ -51,14 +52,14 @@ const createGitIgnoreChecker = async (
     const { stdout } = await execFileAsync("git", ["-C", rootDir, "rev-parse", "--show-toplevel"]);
     repositoryRoot = stdout.trim();
   } catch (error) {
-    if (hasExitCode(error, 128)) {
+    if (hasExactExitCode(error, 128)) {
       return async () => new Set();
     }
 
     throw new CodigamiError("Failed to locate git repository for gitignore evaluation", {
       rootDir,
       command: "git rev-parse --show-toplevel",
-      cause: describeProcessError(error),
+      cause: formatErrorDetails(error),
     });
   }
 
@@ -83,37 +84,46 @@ const createGitIgnoreChecker = async (
     if (uncheckedPaths.length === 0) return ignored;
 
     try {
-      const { stdout } = await execFileAsync("git", [
-        "-C",
-        repositoryRoot,
-        "check-ignore",
-        "--",
-        ...uncheckedPaths,
-      ]);
-      const ignoredRelativePaths = new Set(stdout.split("\n").filter((path) => path.length > 0));
+      for (let i = 0; i < uncheckedPaths.length; i += GIT_CHECK_IGNORE_BATCH_SIZE) {
+        const batch = uncheckedPaths.slice(i, i + GIT_CHECK_IGNORE_BATCH_SIZE);
+        try {
+          const { stdout } = await execFileAsync("git", [
+            "-C",
+            repositoryRoot,
+            "check-ignore",
+            "--",
+            ...batch,
+          ]);
+          const ignoredRelativePaths = new Set(
+            stdout.split("\n").filter((path) => path.length > 0),
+          );
 
-      for (const relativePath of uncheckedPaths) {
-        const isIgnored = ignoredRelativePaths.has(relativePath);
-        ignoredPaths.set(relativePath, isIgnored);
-        if (isIgnored) {
-          const absolutePath = absolutePathMap.get(relativePath);
-          if (absolutePath !== undefined) ignored.add(absolutePath);
+          for (const relativePath of batch) {
+            const isIgnored = ignoredRelativePaths.has(relativePath);
+            ignoredPaths.set(relativePath, isIgnored);
+            if (isIgnored) {
+              const absolutePath = absolutePathMap.get(relativePath);
+              if (absolutePath !== undefined) ignored.add(absolutePath);
+            }
+          }
+        } catch (error) {
+          if (hasExactExitCode(error, 1)) {
+            for (const relativePath of batch) {
+              ignoredPaths.set(relativePath, false);
+            }
+            continue;
+          }
+
+          throw error;
         }
       }
 
       return ignored;
     } catch (error) {
-      if (hasExitCode(error, 1)) {
-        for (const relativePath of uncheckedPaths) {
-          ignoredPaths.set(relativePath, false);
-        }
-        return ignored;
-      }
-
       throw new CodigamiError("Failed to evaluate gitignore rules", {
         rootDir,
         command: "git check-ignore",
-        cause: describeProcessError(error),
+        cause: formatErrorDetails(error),
       });
     }
   };
