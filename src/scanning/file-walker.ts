@@ -62,10 +62,6 @@ const createGitIgnoreChecker = async (
     });
   }
 
-  if (repositoryRoot.length === 0) {
-    return async () => new Set();
-  }
-
   const ignoredPaths = new Map<string, boolean>();
 
   return async (paths: string[]): Promise<Set<string>> => {
