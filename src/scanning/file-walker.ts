@@ -16,12 +16,27 @@ const execFileAsync = promisify(execFile);
 
 const isHidden = (name: string): boolean => name.startsWith(".");
 
-const isExitCode = (error: unknown, code: number): boolean => {
+const hasExitCode = (error: unknown, code: number): boolean => {
   if (typeof error !== "object" || error === null || !("code" in error)) {
     return false;
   }
 
   return (error as { code?: unknown }).code === code;
+};
+
+const describeProcessError = (error: unknown): string => {
+  if (typeof error !== "object" || error === null) {
+    return String(error);
+  }
+
+  const details: string[] = [];
+  if ("code" in error) details.push(`exitCode=${String(error.code)}`);
+  if ("signal" in error && error.signal !== undefined) {
+    details.push(`signal=${String(error.signal)}`);
+  }
+  if (error instanceof Error) details.push(error.message);
+
+  return details.join("; ") || String(error);
 };
 
 const relativeGitPath = (repositoryRoot: string, path: string): string =>
@@ -35,7 +50,19 @@ const createGitIgnoreChecker = async (
   try {
     const { stdout } = await execFileAsync("git", ["-C", rootDir, "rev-parse", "--show-toplevel"]);
     repositoryRoot = stdout.trim();
-  } catch {
+  } catch (error) {
+    if (hasExitCode(error, 128)) {
+      return async () => new Set();
+    }
+
+    throw new CodigamiError("Failed to locate git repository for gitignore evaluation", {
+      rootDir,
+      command: "git rev-parse --show-toplevel",
+      cause: describeProcessError(error),
+    });
+  }
+
+  if (repositoryRoot.length === 0) {
     return async () => new Set();
   }
 
@@ -81,7 +108,7 @@ const createGitIgnoreChecker = async (
 
       return ignored;
     } catch (error) {
-      if (isExitCode(error, 1)) {
+      if (hasExitCode(error, 1)) {
         for (const relativePath of uncheckedPaths) {
           ignoredPaths.set(relativePath, false);
         }
@@ -90,7 +117,8 @@ const createGitIgnoreChecker = async (
 
       throw new CodigamiError("Failed to evaluate gitignore rules", {
         rootDir,
-        cause: error instanceof Error ? error.message : String(error),
+        command: "git check-ignore --no-index",
+        cause: describeProcessError(error),
       });
     }
   };
