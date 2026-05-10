@@ -39,7 +39,7 @@ const describeProcessError = (error: unknown): string => {
   return details.join("; ") || String(error);
 };
 
-const relativeGitPath = (repositoryRoot: string, path: string): string =>
+const toGitRelativePath = (repositoryRoot: string, path: string): string =>
   relative(repositoryRoot, path).split(sep).join("/");
 
 const createGitIgnoreChecker = async (
@@ -71,16 +71,16 @@ const createGitIgnoreChecker = async (
   return async (paths: string[]): Promise<Set<string>> => {
     const ignored = new Set<string>();
     const uncheckedPaths: string[] = [];
-    const absolutePathsByRelativePath = new Map<string, string>();
+    const absolutePathMap = new Map<string, string>();
 
     for (const path of paths) {
-      const relativePath = relativeGitPath(repositoryRoot, path);
+      const relativePath = toGitRelativePath(repositoryRoot, path);
       const cached = ignoredPaths.get(relativePath);
       if (cached === true) {
         ignored.add(path);
       } else if (cached === undefined) {
         uncheckedPaths.push(relativePath);
-        absolutePathsByRelativePath.set(relativePath, path);
+        absolutePathMap.set(relativePath, path);
       }
     }
 
@@ -91,7 +91,6 @@ const createGitIgnoreChecker = async (
         "-C",
         repositoryRoot,
         "check-ignore",
-        "--no-index",
         "--",
         ...uncheckedPaths,
       ]);
@@ -101,7 +100,7 @@ const createGitIgnoreChecker = async (
         const isIgnored = ignoredRelativePaths.has(relativePath);
         ignoredPaths.set(relativePath, isIgnored);
         if (isIgnored) {
-          const absolutePath = absolutePathsByRelativePath.get(relativePath);
+          const absolutePath = absolutePathMap.get(relativePath);
           if (absolutePath !== undefined) ignored.add(absolutePath);
         }
       }
@@ -117,7 +116,7 @@ const createGitIgnoreChecker = async (
 
       throw new CodigamiError("Failed to evaluate gitignore rules", {
         rootDir,
-        command: "git check-ignore --no-index",
+        command: "git check-ignore",
         cause: describeProcessError(error),
       });
     }
