@@ -24,45 +24,72 @@ const isExitCode = (error: unknown, code: number): boolean => {
   return (error as { code?: unknown }).code === code;
 };
 
+const relativeGitPath = (repositoryRoot: string, path: string): string =>
+  relative(repositoryRoot, path).split(sep).join("/");
+
 const createGitIgnoreChecker = async (
   rootDir: string,
-): Promise<(path: string) => Promise<boolean>> => {
+): Promise<(paths: string[]) => Promise<Set<string>>> => {
   let repositoryRoot: string;
 
   try {
     const { stdout } = await execFileAsync("git", ["-C", rootDir, "rev-parse", "--show-toplevel"]);
     repositoryRoot = stdout.trim();
   } catch {
-    return async () => false;
+    return async () => new Set();
   }
 
   const ignoredPaths = new Map<string, boolean>();
 
-  return async (path: string): Promise<boolean> => {
-    const relativePath = relative(repositoryRoot, path).split(sep).join("/");
-    const cached = ignoredPaths.get(relativePath);
-    if (cached !== undefined) return cached;
+  return async (paths: string[]): Promise<Set<string>> => {
+    const ignored = new Set<string>();
+    const uncheckedPaths: string[] = [];
+    const absolutePathsByRelativePath = new Map<string, string>();
+
+    for (const path of paths) {
+      const relativePath = relativeGitPath(repositoryRoot, path);
+      const cached = ignoredPaths.get(relativePath);
+      if (cached === true) {
+        ignored.add(path);
+      } else if (cached === undefined) {
+        uncheckedPaths.push(relativePath);
+        absolutePathsByRelativePath.set(relativePath, path);
+      }
+    }
+
+    if (uncheckedPaths.length === 0) return ignored;
 
     try {
-      await execFileAsync("git", [
+      const { stdout } = await execFileAsync("git", [
         "-C",
         repositoryRoot,
         "check-ignore",
-        "--quiet",
         "--no-index",
         "--",
-        relativePath,
+        ...uncheckedPaths,
       ]);
-      ignoredPaths.set(relativePath, true);
-      return true;
+      const ignoredRelativePaths = new Set(stdout.split("\n").filter((path) => path.length > 0));
+
+      for (const relativePath of uncheckedPaths) {
+        const isIgnored = ignoredRelativePaths.has(relativePath);
+        ignoredPaths.set(relativePath, isIgnored);
+        if (isIgnored) {
+          const absolutePath = absolutePathsByRelativePath.get(relativePath);
+          if (absolutePath !== undefined) ignored.add(absolutePath);
+        }
+      }
+
+      return ignored;
     } catch (error) {
       if (isExitCode(error, 1)) {
-        ignoredPaths.set(relativePath, false);
-        return false;
+        for (const relativePath of uncheckedPaths) {
+          ignoredPaths.set(relativePath, false);
+        }
+        return ignored;
       }
 
       throw new CodigamiError("Failed to evaluate gitignore rules", {
-        path,
+        rootDir,
         cause: error instanceof Error ? error.message : String(error),
       });
     }
@@ -108,12 +135,14 @@ const walkDirectoryFromBase = async (
   const walk = async (dir: string): Promise<void> => {
     const entries = await readdir(dir, { withFileTypes: true });
 
-    for (const entry of entries) {
-      if (isHidden(entry.name)) continue;
-      if (SKIP_DIRS.has(entry.name)) continue;
+    const visibleEntries = entries.filter(
+      (entry) => !isHidden(entry.name) && !SKIP_DIRS.has(entry.name),
+    );
+    const ignoredPaths = await isGitIgnored(visibleEntries.map((entry) => join(dir, entry.name)));
 
+    for (const entry of visibleEntries) {
       const absolutePath = join(dir, entry.name);
-      if (await isGitIgnored(absolutePath)) continue;
+      if (ignoredPaths.has(absolutePath)) continue;
 
       if (entry.isDirectory()) {
         await walk(absolutePath);
