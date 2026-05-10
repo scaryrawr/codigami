@@ -24,7 +24,9 @@ const isExitCode = (error: unknown, code: number): boolean => {
   return (error as { code?: unknown }).code === code;
 };
 
-const createGitIgnoreChecker = async (rootDir: string): Promise<(path: string) => Promise<boolean>> => {
+const createGitIgnoreChecker = async (
+  rootDir: string,
+): Promise<(path: string) => Promise<boolean>> => {
   let repositoryRoot: string;
 
   try {
