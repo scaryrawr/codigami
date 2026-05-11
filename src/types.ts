@@ -15,6 +15,14 @@ export interface CodeUnit {
 
 export type ComparisonLevel = "function" | "class" | "file";
 
+export const COMPARISON_LEVELS = [
+  "function",
+  "class",
+  "file",
+] as const satisfies readonly ComparisonLevel[];
+
+export const DEFAULT_COMPARISON_LEVELS = ["function"] as const satisfies readonly ComparisonLevel[];
+
 export interface LanguageParser {
   readonly language: string;
   readonly extensions: readonly string[];

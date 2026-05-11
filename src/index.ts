@@ -11,7 +11,7 @@ export type {
   PipelineConfig,
   CodigamiError,
 } from "./types.ts";
-export { makeUnitId } from "./types.ts";
+export { COMPARISON_LEVELS, DEFAULT_COMPARISON_LEVELS, makeUnitId } from "./types.ts";
 
 export { walkDirectories, walkDirectory } from "./scanning/file-walker.ts";
 export type { DiscoveredFile } from "./scanning/file-walker.ts";

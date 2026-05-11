@@ -5,6 +5,7 @@ import { clusterDuplicates, findDuplicatePairs } from "./matching/duplicate-find
 import { formatReport } from "./output/json-formatter.ts";
 import {
   CodigamiError,
+  DEFAULT_COMPARISON_LEVELS,
   type CodeUnit,
   type ComparisonLevel,
   type DuplicateReport,
@@ -51,8 +52,6 @@ interface BufferedUnit {
   unit: CodeUnit;
 }
 
-const DEFAULT_COMPARISON_LEVELS: readonly ComparisonLevel[] = ["function"];
-
 const FUNCTION_UNIT_TYPES = new Set([
   "arrow_function",
   "constructor_declaration",
@@ -90,7 +89,7 @@ const normalizeComparisonLevels = (
   return normalized;
 };
 
-const comparisonLevelsCacheKey = (levels: readonly ComparisonLevel[]): string => {
+export const createComparisonLevelsCacheKey = (levels: readonly ComparisonLevel[]): string => {
   const sorted = [...levels].sort();
   return `comparison-levels:${sorted.join(",")}`;
 };
@@ -99,7 +98,7 @@ const pipelineCacheKey = (
   parserCacheKey: string | undefined,
   levels: readonly ComparisonLevel[],
 ): string => {
-  const levelCacheKey = comparisonLevelsCacheKey(levels);
+  const levelCacheKey = createComparisonLevelsCacheKey(levels);
   return parserCacheKey ? `${parserCacheKey}|${levelCacheKey}` : levelCacheKey;
 };
 

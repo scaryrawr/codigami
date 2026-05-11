@@ -8,7 +8,11 @@ import {
   type IndexStore,
   type LanguageParser,
 } from "../src/types.ts";
-import { runPipeline, type PipelineProgress } from "../src/pipeline.ts";
+import {
+  createComparisonLevelsCacheKey,
+  runPipeline,
+  type PipelineProgress,
+} from "../src/pipeline.ts";
 import { hashContent } from "../src/scanning/file-change-detector.ts";
 import { createHash } from "node:crypto";
 
@@ -35,7 +39,7 @@ describe("runPipeline", () => {
   const unitA = makeUnit("a1", "foo", "function foo() {}");
   const unitB = makeUnit("b1", "bar", "function bar() {}");
   const unitC = makeUnit("c1", "baz", "function baz() {}");
-  const functionLevelCacheKey = "comparison-levels:function";
+  const functionLevelCacheKey = createComparisonLevelsCacheKey(["function"]);
 
   let mockParser: LanguageParser;
   let mockEmbeddingProvider: EmbeddingProvider;
@@ -613,7 +617,7 @@ describe("runPipeline", () => {
       expect(mockParser.parse).toHaveBeenCalledTimes(1);
       expect(hashStore.setHash).toHaveBeenCalledWith(
         "test.ts",
-        hashContent(content, "comparison-levels:class,function"),
+        hashContent(content, createComparisonLevelsCacheKey(["function", "class"])),
       );
     });
 

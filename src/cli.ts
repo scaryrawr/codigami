@@ -11,6 +11,8 @@ import { createSqliteHashStore } from "./indexing/sqlite-hash-store.ts";
 import { runPipeline } from "./pipeline.ts";
 import {
   CodigamiError,
+  COMPARISON_LEVELS,
+  DEFAULT_COMPARISON_LEVELS,
   type ComparisonLevel,
   type FileHashStore,
   type IndexStore,
@@ -30,17 +32,16 @@ const parseThreshold = (value: string): number | undefined => {
   return threshold;
 };
 
-const COMPARISON_LEVELS = new Set<ComparisonLevel>(["function", "class", "file"]);
-
 const parseComparisonLevels = (values: string[] | undefined): ComparisonLevel[] | undefined => {
-  const rawValues = values ?? ["function"];
+  const allowedLevels = new Set<ComparisonLevel>(COMPARISON_LEVELS);
+  const rawValues = values ?? [...DEFAULT_COMPARISON_LEVELS];
   const levels: ComparisonLevel[] = [];
 
   for (const rawValue of rawValues) {
     for (const part of rawValue.split(",")) {
       const level = part.trim();
       if (level === "") continue;
-      if (!COMPARISON_LEVELS.has(level as ComparisonLevel)) return undefined;
+      if (!allowedLevels.has(level as ComparisonLevel)) return undefined;
       levels.push(level as ComparisonLevel);
     }
   }
