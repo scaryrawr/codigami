@@ -2,7 +2,7 @@
 
 **Code + Shinigami**
 
-![death note delete](./assets/delete.gif)
+![death note delete](/assets/delete.gif)
 
 Find duplicate code using embedding similarity — not lexical matching.
 
