@@ -1,10 +1,14 @@
+import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
+import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { commonDirectory, walkDirectories, walkDirectory } from "../../src/scanning/file-walker.ts";
 import { CodigamiError } from "../../src/types.ts";
+
+const execFileAsync = promisify(execFile);
 
 describe("walkDirectory", () => {
   let root: string;
@@ -64,6 +68,33 @@ describe("walkDirectory", () => {
 
     expect(files).toHaveLength(1);
     expect(files[0].relativePath).toBe("app.ts");
+  });
+
+  it("skips files and directories ignored by the repository gitignore", async () => {
+    await execFileAsync("git", ["init"], { cwd: root });
+    await mkdir(join(root, "dist"), { recursive: true });
+    await writeFile(join(root, ".gitignore"), "dist/\n*.generated.ts\n");
+    await writeFile(join(root, "dist", "bundle.ts"), "");
+    await writeFile(join(root, "keep.ts"), "");
+    await writeFile(join(root, "schema.generated.ts"), "");
+
+    const files = await walkDirectory(root, [".ts"]);
+
+    expect(files.map((f) => f.relativePath)).toEqual(["keep.ts"]);
+  });
+
+  it("skips files ignored by nested gitignores", async () => {
+    await execFileAsync("git", ["init"], { cwd: root });
+    await mkdir(join(root, "packages", "a", "src"), { recursive: true });
+    await writeFile(join(root, "packages", "a", ".gitignore"), "coverage/\n*.tmp.ts\n");
+    await mkdir(join(root, "packages", "a", "coverage"), { recursive: true });
+    await writeFile(join(root, "packages", "a", "coverage", "report.ts"), "");
+    await writeFile(join(root, "packages", "a", "src", "keep.ts"), "");
+    await writeFile(join(root, "packages", "a", "src", "fixture.tmp.ts"), "");
+
+    const files = await walkDirectory(root, [".ts"]);
+
+    expect(files.map((f) => f.relativePath)).toEqual([join("packages", "a", "src", "keep.ts")]);
   });
 
   it("skips hidden files and directories", async () => {
