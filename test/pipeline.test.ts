@@ -269,6 +269,31 @@ describe("runPipeline", () => {
     expect(mockEmbeddingProvider.embed).toHaveBeenCalledWith([source]);
   });
 
+  it.each([
+    ["", 0, 0],
+    ["single line", 1, 1],
+    ["first\r\nsecond", 1, 2],
+    ["\n\n", 1, 3],
+  ])("sets whole-file line ranges for %j", async (source, expectedStartLine, expectedEndLine) => {
+    mockParser.parse = vi.fn(async () => []);
+
+    await runPipeline({
+      files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],
+      parser: mockParser,
+      embeddingProvider: mockEmbeddingProvider,
+      store: mockStore,
+      threshold: 0.8,
+      readFile: createMockFileReader(new Map([["/abs/test.ts", source]])),
+      comparisonLevels: ["file"],
+    });
+
+    expect(storedUnits[0]).toMatchObject({
+      startLine: expectedStartLine,
+      endLine: expectedEndLine,
+      unitType: "file",
+    });
+  });
+
   it("batches embedding calls", async () => {
     await runPipeline({
       files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],

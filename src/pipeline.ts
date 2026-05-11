@@ -110,15 +110,17 @@ const includesLevel = (levels: ReadonlySet<ComparisonLevel>, unit: CodeUnit): bo
   return false;
 };
 
-const lineCount = (source: string): number => source.split(/\r\n|\r|\n/).length;
+const lineCount = (source: string): number =>
+  source === "" ? 0 : source.split(/\r\n|\r|\n/).length;
 
 const createFileUnit = (filePath: string, source: string, language: string): CodeUnit => {
   const endLine = lineCount(source);
+  const startLine = endLine === 0 ? 0 : 1;
 
   return {
-    id: makeUnitId(`${filePath}#file`, 1, endLine),
+    id: makeUnitId(`${filePath}#file`, startLine, endLine),
     filePath,
-    startLine: 1,
+    startLine,
     endLine,
     unitType: "file",
     name: filePath,
