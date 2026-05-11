@@ -81,7 +81,9 @@ const describeUnknownError = (error: unknown): string => {
 const normalizeComparisonLevels = (
   levels: readonly ComparisonLevel[] | undefined,
 ): ComparisonLevel[] => {
-  const normalized = Array.from(new Set(levels ?? DEFAULT_COMPARISON_LEVELS));
+  if (levels === undefined) return [...DEFAULT_COMPARISON_LEVELS];
+
+  const normalized = Array.from(new Set(levels));
   if (normalized.length === 0) {
     throw new CodigamiError("comparisonLevels must include at least one level");
   }
@@ -136,7 +138,7 @@ const selectComparisonUnits = (
   const units = parsedUnits.filter((unit) => includesLevel(levelSet, unit));
 
   if (levelSet.has("file")) {
-    units.push(createFileUnit(filePath, source, parsedUnits[0]?.language ?? parserLanguage));
+    units.push(createFileUnit(filePath, source, parserLanguage));
   }
 
   return units;

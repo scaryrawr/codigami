@@ -34,7 +34,7 @@ const parseThreshold = (value: string): number | undefined => {
 
 const parseComparisonLevels = (values: string[] | undefined): ComparisonLevel[] | undefined => {
   const allowedLevels = new Set<ComparisonLevel>(COMPARISON_LEVELS);
-  const rawValues = values ?? [...DEFAULT_COMPARISON_LEVELS];
+  const rawValues = values ?? DEFAULT_COMPARISON_LEVELS;
   const levels: ComparisonLevel[] = [];
 
   for (const rawValue of rawValues) {
