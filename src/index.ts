@@ -1,6 +1,7 @@
 // Public API
 export type {
   CodeUnit,
+  ComparisonLevel,
   DuplicateCluster,
   DuplicatePair,
   DuplicateReport,

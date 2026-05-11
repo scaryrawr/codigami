@@ -57,6 +57,10 @@ Each unit includes:
 - `source`
 - `language`
 
+By default, the CLI compares function-level units. Use `--level class` or `--level file`
+to include broader units, and repeat or comma-separate `--level` values to compare multiple
+levels in one run.
+
 ### 2. Incremental Change Detection
 
 By default, the CLI uses the SQLite index as an incremental cache:
@@ -171,22 +175,29 @@ npx codigami --output report.json
 # Ignore file hashes and reprocess discovered files
 npx codigami --full
 
+# Compare both function and class-level units
+npx codigami --level function,class
+
+# Compare whole-file units
+npx codigami --level file
+
 # Use a custom SQLite database path
 npx codigami --db /tmp/codigami-index.db
 ```
 
 ### CLI Options
 
-| Option        | Short | Description                                                      | Default                         |
-| ------------- | ----- | ---------------------------------------------------------------- | ------------------------------- |
-| `--dir`       | `-d`  | Directory to scan; repeat to scan multiple directories           | `.`                             |
-| `--endpoint`  | `-e`  | OpenAI-compatible embedding endpoint                             | `http://localhost:14982/v1`     |
-| `--model`     | `-m`  | Embedding model name                                             | `jina-code-embeddings-1.5b-mlx` |
-| `--threshold` | `-t`  | Similarity threshold, from `0.0` to `1.0`                        | `0.8`                           |
-| `--db`        |       | SQLite database path                                             | `<dir>/.codigami/index.db`      |
-| `--full`      |       | Process all discovered files instead of using stored file hashes | `false`                         |
-| `--output`    | `-o`  | Write JSON report to a file                                      | stdout                          |
-| `--help`      | `-h`  | Show help message                                                |                                 |
+| Option        | Short | Description                                                                | Default                         |
+| ------------- | ----- | -------------------------------------------------------------------------- | ------------------------------- |
+| `--dir`       | `-d`  | Directory to scan; repeat to scan multiple directories                     | `.`                             |
+| `--endpoint`  | `-e`  | OpenAI-compatible embedding endpoint                                       | `http://localhost:14982/v1`     |
+| `--model`     | `-m`  | Embedding model name                                                       | `jina-code-embeddings-1.5b-mlx` |
+| `--threshold` | `-t`  | Similarity threshold, from `0.0` to `1.0`                                  | `0.8`                           |
+| `--level`     | `-l`  | Comparison level: `function`, `class`, or `file`; repeat or comma-separate | `function`                      |
+| `--db`        |       | SQLite database path                                                       | `<dir>/.codigami/index.db`      |
+| `--full`      |       | Process all discovered files instead of using stored file hashes           | `false`                         |
+| `--output`    | `-o`  | Write JSON report to a file                                                | stdout                          |
+| `--help`      | `-h`  | Show help message                                                          |                                 |
 
 ## Library API
 

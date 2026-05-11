@@ -103,10 +103,7 @@ const pipelineCacheKey = (
   return parserCacheKey ? `${parserCacheKey}|${levelCacheKey}` : levelCacheKey;
 };
 
-const includesLevel = (
-  levels: ReadonlySet<ComparisonLevel>,
-  unit: CodeUnit,
-): boolean => {
+const includesLevel = (levels: ReadonlySet<ComparisonLevel>, unit: CodeUnit): boolean => {
   if (levels.has("function") && FUNCTION_UNIT_TYPES.has(unit.unitType)) return true;
   if (levels.has("class") && CLASS_UNIT_TYPES.has(unit.unitType)) return true;
   return false;
@@ -114,11 +111,7 @@ const includesLevel = (
 
 const lineCount = (source: string): number => source.split(/\r\n|\r|\n/).length;
 
-const createFileUnit = (
-  filePath: string,
-  source: string,
-  language: string,
-): CodeUnit => ({
+const createFileUnit = (filePath: string, source: string, language: string): CodeUnit => ({
   id: makeUnitId(`${filePath}#file`, 1, lineCount(source)),
   filePath,
   startLine: 1,

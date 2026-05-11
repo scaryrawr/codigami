@@ -32,9 +32,7 @@ const parseThreshold = (value: string): number | undefined => {
 
 const COMPARISON_LEVELS = new Set<ComparisonLevel>(["function", "class", "file"]);
 
-const parseComparisonLevels = (
-  values: string[] | undefined,
-): ComparisonLevel[] | undefined => {
+const parseComparisonLevels = (values: string[] | undefined): ComparisonLevel[] | undefined => {
   const rawValues = values ?? ["function"];
   const levels: ComparisonLevel[] = [];
 

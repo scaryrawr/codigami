@@ -593,6 +593,30 @@ describe("runPipeline", () => {
       expect(mockEmbeddingProvider.embed).not.toHaveBeenCalled();
     });
 
+    it("reprocesses unchanged content when comparison levels change", async () => {
+      const content = "source code";
+      const hashStore = createMockHashStore(
+        new Map([["test.ts", hashContent(content, defaultPipelineCacheKey)]]),
+      );
+
+      await runPipeline({
+        files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],
+        parser: mockParser,
+        embeddingProvider: mockEmbeddingProvider,
+        store: mockStore,
+        threshold: 0.8,
+        hashStore,
+        readFile: createMockFileReader(new Map([["/abs/test.ts", content]])),
+        comparisonLevels: ["function", "class"],
+      });
+
+      expect(mockParser.parse).toHaveBeenCalledTimes(1);
+      expect(hashStore.setHash).toHaveBeenCalledWith(
+        "test.ts",
+        hashContent(content, "comparison-levels:class,function"),
+      );
+    });
+
     it("prunes deleted files from store and hash store", async () => {
       const hashStore = createMockHashStore(
         new Map([
