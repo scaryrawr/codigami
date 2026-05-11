@@ -111,16 +111,20 @@ const includesLevel = (levels: ReadonlySet<ComparisonLevel>, unit: CodeUnit): bo
 
 const lineCount = (source: string): number => source.split(/\r\n|\r|\n/).length;
 
-const createFileUnit = (filePath: string, source: string, language: string): CodeUnit => ({
-  id: makeUnitId(`${filePath}#file`, 1, lineCount(source)),
-  filePath,
-  startLine: 1,
-  endLine: lineCount(source),
-  unitType: "file",
-  name: filePath,
-  source,
-  language,
-});
+const createFileUnit = (filePath: string, source: string, language: string): CodeUnit => {
+  const endLine = lineCount(source);
+
+  return {
+    id: makeUnitId(`${filePath}#file`, 1, endLine),
+    filePath,
+    startLine: 1,
+    endLine,
+    unitType: "file",
+    name: filePath,
+    source,
+    language,
+  };
+};
 
 const selectComparisonUnits = (
   parsedUnits: CodeUnit[],

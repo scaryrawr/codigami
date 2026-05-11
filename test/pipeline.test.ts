@@ -35,7 +35,7 @@ describe("runPipeline", () => {
   const unitA = makeUnit("a1", "foo", "function foo() {}");
   const unitB = makeUnit("b1", "bar", "function bar() {}");
   const unitC = makeUnit("c1", "baz", "function baz() {}");
-  const defaultPipelineCacheKey = "comparison-levels:function";
+  const functionLevelCacheKey = "comparison-levels:function";
 
   let mockParser: LanguageParser;
   let mockEmbeddingProvider: EmbeddingProvider;
@@ -516,7 +516,7 @@ describe("runPipeline", () => {
     it("skips unchanged files", async () => {
       const fileContent = "source code";
       const hashStore = createMockHashStore(
-        new Map([["test.ts", hashContent(fileContent, defaultPipelineCacheKey)]]),
+        new Map([["test.ts", hashContent(fileContent, functionLevelCacheKey)]]),
       );
 
       await runPipeline({
@@ -574,7 +574,7 @@ describe("runPipeline", () => {
       expect(parserWithCacheKey.parse).toHaveBeenCalledTimes(1);
       expect(hashStore.setHash).toHaveBeenCalledWith(
         "test.ts",
-        hashContent(content, `parser-rules-v2|${defaultPipelineCacheKey}`),
+        hashContent(content, `parser-rules-v2|${functionLevelCacheKey}`),
       );
 
       vi.clearAllMocks();
@@ -596,7 +596,7 @@ describe("runPipeline", () => {
     it("reprocesses unchanged content when comparison levels change", async () => {
       const content = "source code";
       const hashStore = createMockHashStore(
-        new Map([["test.ts", hashContent(content, defaultPipelineCacheKey)]]),
+        new Map([["test.ts", hashContent(content, functionLevelCacheKey)]]),
       );
 
       await runPipeline({
@@ -620,7 +620,7 @@ describe("runPipeline", () => {
     it("prunes deleted files from store and hash store", async () => {
       const hashStore = createMockHashStore(
         new Map([
-          ["existing.ts", hashContent("content", defaultPipelineCacheKey)],
+          ["existing.ts", hashContent("content", functionLevelCacheKey)],
           ["deleted.ts", "old-hash"],
         ]),
       );
@@ -644,7 +644,7 @@ describe("runPipeline", () => {
     it("emits skipped progress event", async () => {
       const content = "source";
       const hashStore = createMockHashStore(
-        new Map([["a.ts", hashContent(content, defaultPipelineCacheKey)]]),
+        new Map([["a.ts", hashContent(content, functionLevelCacheKey)]]),
       );
       const events: PipelineProgress[] = [];
 
@@ -694,7 +694,7 @@ describe("runPipeline", () => {
 
       expect(hashStore.setHash).toHaveBeenCalledWith(
         "test.ts",
-        hashContent(content, defaultPipelineCacheKey),
+        hashContent(content, functionLevelCacheKey),
       );
     });
 
@@ -770,7 +770,7 @@ describe("runPipeline", () => {
       );
       expect(hashStore.setHash).toHaveBeenCalledWith(
         "test.ts",
-        hashContent("updated content", defaultPipelineCacheKey),
+        hashContent("updated content", functionLevelCacheKey),
       );
     });
   });
