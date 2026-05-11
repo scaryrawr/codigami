@@ -9,7 +9,12 @@ import { createOpenAIEmbeddingProvider } from "./embedding/openai-embedding-prov
 import { createSqliteStoreFromDatabase } from "./indexing/sqlite-store.ts";
 import { createSqliteHashStore } from "./indexing/sqlite-hash-store.ts";
 import { runPipeline } from "./pipeline.ts";
-import { CodigamiError, type FileHashStore, type IndexStore } from "./types.ts";
+import {
+  CodigamiError,
+  type ComparisonLevel,
+  type FileHashStore,
+  type IndexStore,
+} from "./types.ts";
 
 const DEFAULT_ENDPOINT = "http://localhost:14982/v1";
 const DEFAULT_MODEL = "jina-code-embeddings-1.5b-mlx";
@@ -25,6 +30,26 @@ const parseThreshold = (value: string): number | undefined => {
   return threshold;
 };
 
+const COMPARISON_LEVELS = new Set<ComparisonLevel>(["function", "class", "file"]);
+
+const parseComparisonLevels = (
+  values: string[] | undefined,
+): ComparisonLevel[] | undefined => {
+  const rawValues = values ?? ["function"];
+  const levels: ComparisonLevel[] = [];
+
+  for (const rawValue of rawValues) {
+    for (const part of rawValue.split(",")) {
+      const level = part.trim();
+      if (level === "") continue;
+      if (!COMPARISON_LEVELS.has(level as ComparisonLevel)) return undefined;
+      levels.push(level as ComparisonLevel);
+    }
+  }
+
+  return levels.length > 0 ? Array.from(new Set(levels)) : undefined;
+};
+
 export const main = async (argv: string[] = process.argv.slice(2)): Promise<void> => {
   const { values } = parseArgs({
     args: argv,
@@ -33,6 +58,7 @@ export const main = async (argv: string[] = process.argv.slice(2)): Promise<void
       endpoint: { type: "string", short: "e", default: DEFAULT_ENDPOINT },
       model: { type: "string", short: "m", default: DEFAULT_MODEL },
       threshold: { type: "string", short: "t", default: String(DEFAULT_THRESHOLD) },
+      level: { type: "string", short: "l", multiple: true },
       db: { type: "string", default: "" },
       output: { type: "string", short: "o", default: "" },
       full: { type: "boolean", default: false },
@@ -51,6 +77,7 @@ Options:
   -e, --endpoint <url>    OpenAI-compatible embedding endpoint
   -m, --model <name>      Embedding model name
   -t, --threshold <n>     Similarity threshold 0.0-1.0 (default: ${DEFAULT_THRESHOLD})
+  -l, --level <level>     Compare function, class, or file units; repeat or comma-separate (default: function)
       --db <path>         SQLite database path (default: <dir>/.codigami/index.db)
       --full              Force full re-index (ignore file hashes)
   -o, --output <path>     Write JSON report to file (default: stdout)
@@ -60,9 +87,17 @@ Options:
 
   const directories = (values.dir ?? ["."]).map((dir) => resolve(dir));
   const threshold = parseThreshold(values.threshold!);
+  const comparisonLevels = parseComparisonLevels(values.level);
   if (threshold === undefined) {
     console.error(
       `Error: threshold must be a number between 0.0 and 1.0, got: ${JSON.stringify(values.threshold)}`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  if (comparisonLevels === undefined) {
+    console.error(
+      `Error: level must include one or more of: function, class, file; got: ${JSON.stringify(values.level)}`,
     );
     process.exitCode = 1;
     return;
@@ -108,6 +143,7 @@ Options:
       embeddingProvider,
       store,
       threshold,
+      comparisonLevels,
       hashStore,
       onProgress: (progress) => {
         switch (progress.stage) {

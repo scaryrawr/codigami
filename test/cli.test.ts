@@ -157,6 +157,18 @@ describe("main", () => {
     expect(mocks.runPipeline).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid comparison levels before scanning or opening stores", async () => {
+    await main(["--level", "package"]);
+
+    expect(process.exitCode).toBe(1);
+    expect(console.error).toHaveBeenCalledWith(
+      'Error: level must include one or more of: function, class, file; got: ["package"]',
+    );
+    expect(mocks.parserInit).not.toHaveBeenCalled();
+    expect(mocks.createSqliteStoreFromDatabase).not.toHaveBeenCalled();
+    expect(mocks.MockDatabase.instances).toHaveLength(0);
+  });
+
   it("uses one shared database connection for the index and hash stores", async () => {
     await main(["--threshold", "0.75"]);
 
@@ -171,6 +183,7 @@ describe("main", () => {
       expect.objectContaining({
         store: mocks.indexStores[0],
         threshold: 0.75,
+        comparisonLevels: ["function"],
         hashStore: mocks.hashStores[0],
       }),
     );
@@ -191,6 +204,17 @@ describe("main", () => {
     expect(mocks.runPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
         files: [],
+      }),
+    );
+  });
+
+  it("passes repeated and comma-separated comparison levels to the pipeline", async () => {
+    await main(["--level", "function,class", "--level", "file"]);
+
+    expect(process.exitCode).toBeUndefined();
+    expect(mocks.runPipeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        comparisonLevels: ["function", "class", "file"],
       }),
     );
   });

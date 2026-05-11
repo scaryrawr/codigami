@@ -35,6 +35,7 @@ describe("runPipeline", () => {
   const unitA = makeUnit("a1", "foo", "function foo() {}");
   const unitB = makeUnit("b1", "bar", "function bar() {}");
   const unitC = makeUnit("c1", "baz", "function baz() {}");
+  const defaultPipelineCacheKey = "comparison-levels:function";
 
   let mockParser: LanguageParser;
   let mockEmbeddingProvider: EmbeddingProvider;
@@ -187,6 +188,81 @@ describe("runPipeline", () => {
 
     expect(report.totalUnits).toBe(0);
     expect(report.duplicateClusters.length).toBe(0);
+  });
+
+  it("filters parsed units to function level by default", async () => {
+    const classUnit: CodeUnit = {
+      ...unitA,
+      id: "class1",
+      unitType: "class_declaration",
+      name: "Worker",
+      source: "class Worker { run() {} }",
+    };
+    mockParser.parse = vi.fn(async () => [classUnit, unitA]);
+
+    await runPipeline({
+      files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],
+      parser: mockParser,
+      embeddingProvider: mockEmbeddingProvider,
+      store: mockStore,
+      threshold: 0.8,
+      readFile: createMockFileReader(new Map([["/abs/test.ts", "source"]])),
+    });
+
+    expect(storedUnits.map((unit) => unit.unitType)).toEqual(["function_declaration"]);
+  });
+
+  it("includes class-level units when requested", async () => {
+    const classUnit: CodeUnit = {
+      ...unitA,
+      id: "class1",
+      unitType: "class_declaration",
+      name: "Worker",
+      source: "class Worker { run() {} }",
+    };
+    mockParser.parse = vi.fn(async () => [classUnit, unitA]);
+
+    await runPipeline({
+      files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],
+      parser: mockParser,
+      embeddingProvider: mockEmbeddingProvider,
+      store: mockStore,
+      threshold: 0.8,
+      readFile: createMockFileReader(new Map([["/abs/test.ts", "source"]])),
+      comparisonLevels: ["function", "class"],
+    });
+
+    expect(storedUnits.map((unit) => unit.unitType)).toEqual([
+      "class_declaration",
+      "function_declaration",
+    ]);
+  });
+
+  it("adds whole-file units when file level is requested", async () => {
+    const source = "const value = 1;\nconst other = 2;";
+    mockParser.parse = vi.fn(async () => []);
+
+    await runPipeline({
+      files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],
+      parser: mockParser,
+      embeddingProvider: mockEmbeddingProvider,
+      store: mockStore,
+      threshold: 0.8,
+      readFile: createMockFileReader(new Map([["/abs/test.ts", source]])),
+      comparisonLevels: ["file"],
+    });
+
+    expect(storedUnits).toHaveLength(1);
+    expect(storedUnits[0]).toMatchObject({
+      filePath: "test.ts",
+      startLine: 1,
+      endLine: 2,
+      unitType: "file",
+      name: "test.ts",
+      source,
+      language: "typescript",
+    });
+    expect(mockEmbeddingProvider.embed).toHaveBeenCalledWith([source]);
   });
 
   it("batches embedding calls", async () => {
@@ -439,7 +515,9 @@ describe("runPipeline", () => {
 
     it("skips unchanged files", async () => {
       const fileContent = "source code";
-      const hashStore = createMockHashStore(new Map([["test.ts", sha256(fileContent)]]));
+      const hashStore = createMockHashStore(
+        new Map([["test.ts", hashContent(fileContent, defaultPipelineCacheKey)]]),
+      );
 
       await runPipeline({
         files: [{ relativePath: "test.ts", absolutePath: "/abs/test.ts" }],
@@ -496,7 +574,7 @@ describe("runPipeline", () => {
       expect(parserWithCacheKey.parse).toHaveBeenCalledTimes(1);
       expect(hashStore.setHash).toHaveBeenCalledWith(
         "test.ts",
-        hashContent(content, "parser-rules-v2"),
+        hashContent(content, `parser-rules-v2|${defaultPipelineCacheKey}`),
       );
 
       vi.clearAllMocks();
@@ -518,7 +596,7 @@ describe("runPipeline", () => {
     it("prunes deleted files from store and hash store", async () => {
       const hashStore = createMockHashStore(
         new Map([
-          ["existing.ts", sha256("content")],
+          ["existing.ts", hashContent("content", defaultPipelineCacheKey)],
           ["deleted.ts", "old-hash"],
         ]),
       );
@@ -541,7 +619,9 @@ describe("runPipeline", () => {
 
     it("emits skipped progress event", async () => {
       const content = "source";
-      const hashStore = createMockHashStore(new Map([["a.ts", sha256(content)]]));
+      const hashStore = createMockHashStore(
+        new Map([["a.ts", hashContent(content, defaultPipelineCacheKey)]]),
+      );
       const events: PipelineProgress[] = [];
 
       mockStore.getAllWithEmbeddings = vi.fn(() => []);
@@ -588,7 +668,10 @@ describe("runPipeline", () => {
         readFile: createMockFileReader(new Map([["/abs/test.ts", content]])),
       });
 
-      expect(hashStore.setHash).toHaveBeenCalledWith("test.ts", sha256(content));
+      expect(hashStore.setHash).toHaveBeenCalledWith(
+        "test.ts",
+        hashContent(content, defaultPipelineCacheKey),
+      );
     });
 
     it("does not mark a changed file processed or delete stale units when embedding fails", async () => {
@@ -661,7 +744,10 @@ describe("runPipeline", () => {
           { unitId: unitC.id, embedding: [1, 0, 0] },
         ],
       );
-      expect(hashStore.setHash).toHaveBeenCalledWith("test.ts", sha256("updated content"));
+      expect(hashStore.setHash).toHaveBeenCalledWith(
+        "test.ts",
+        hashContent("updated content", defaultPipelineCacheKey),
+      );
     });
   });
 });

@@ -13,6 +13,8 @@ export interface CodeUnit {
   language: string;
 }
 
+export type ComparisonLevel = "function" | "class" | "file";
+
 export interface LanguageParser {
   readonly language: string;
   readonly extensions: readonly string[];
@@ -92,6 +94,7 @@ export interface PipelineConfig {
   similarityThreshold: number;
   dbPath: string;
   extensions?: string[];
+  comparisonLevels?: ComparisonLevel[];
 }
 
 // --- Errors ---
