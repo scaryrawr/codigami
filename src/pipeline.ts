@@ -5,13 +5,16 @@ import { clusterDuplicates, findDuplicatePairs } from "./matching/duplicate-find
 import { formatReport } from "./output/json-formatter.ts";
 import {
   CodigamiError,
+  DEFAULT_COMPARISON_LEVELS,
   type CodeUnit,
+  type ComparisonLevel,
   type DuplicateReport,
   type EmbeddingProvider,
   type FileHashStore,
   type IndexStore,
   type LanguageParser,
   type StoredEmbedding,
+  makeUnitId,
 } from "./types.ts";
 
 export type PipelineProgress =
@@ -31,6 +34,7 @@ export interface PipelineInput {
   readFile?: (path: string) => Promise<string>;
   embeddingBatchSize?: number;
   parseConcurrency?: number;
+  comparisonLevels?: readonly ComparisonLevel[];
   onProgress?: (progress: PipelineProgress) => void;
 }
 
@@ -48,8 +52,98 @@ interface BufferedUnit {
   unit: CodeUnit;
 }
 
+const FUNCTION_UNIT_TYPES = new Set([
+  "arrow_function",
+  "constructor_declaration",
+  "function",
+  "function_declaration",
+  "function_definition",
+  "function_expression",
+  "function_item",
+  "method_declaration",
+  "method_definition",
+]);
+
+const CLASS_UNIT_TYPES = new Set([
+  "class_declaration",
+  "class_definition",
+  "class_specifier",
+  "impl_item",
+  "record_declaration",
+  "struct_declaration",
+  "struct_specifier",
+]);
+
 const describeUnknownError = (error: unknown): string => {
   return error instanceof Error ? error.message : String(error);
+};
+
+const normalizeComparisonLevels = (
+  levels: readonly ComparisonLevel[] | undefined,
+): ComparisonLevel[] => {
+  if (levels === undefined) return [...DEFAULT_COMPARISON_LEVELS];
+
+  const normalized = Array.from(new Set(levels));
+  if (normalized.length === 0) {
+    throw new CodigamiError("comparisonLevels must include at least one level");
+  }
+
+  return normalized;
+};
+
+export const createComparisonLevelsCacheKey = (levels: readonly ComparisonLevel[]): string => {
+  const sorted = [...levels].sort();
+  return `comparison-levels:${sorted.join(",")}`;
+};
+
+const pipelineCacheKey = (
+  parserCacheKey: string | undefined,
+  levels: readonly ComparisonLevel[],
+): string => {
+  const levelCacheKey = createComparisonLevelsCacheKey(levels);
+  return parserCacheKey ? `${parserCacheKey}|${levelCacheKey}` : levelCacheKey;
+};
+
+const includesLevel = (levels: ReadonlySet<ComparisonLevel>, unit: CodeUnit): boolean => {
+  if (levels.has("function") && FUNCTION_UNIT_TYPES.has(unit.unitType)) return true;
+  if (levels.has("class") && CLASS_UNIT_TYPES.has(unit.unitType)) return true;
+  return false;
+};
+
+const lineCount = (source: string): number =>
+  source === "" ? 0 : source.split(/\r\n|\r|\n/).length;
+
+const createFileUnit = (filePath: string, source: string, language: string): CodeUnit => {
+  const endLine = lineCount(source);
+  const startLine = endLine === 0 ? 0 : 1;
+
+  return {
+    id: makeUnitId(`${filePath}#file`, startLine, endLine),
+    filePath,
+    startLine,
+    endLine,
+    unitType: "file",
+    name: filePath,
+    source,
+    language,
+  };
+};
+
+const selectComparisonUnits = (
+  parsedUnits: CodeUnit[],
+  filePath: string,
+  source: string,
+  parserLanguage: string,
+  levels: readonly ComparisonLevel[],
+): CodeUnit[] => {
+  const levelSet = new Set(levels);
+  const units = parsedUnits.filter((unit) => includesLevel(levelSet, unit));
+
+  if (levelSet.has("file")) {
+    units.push(createFileUnit(filePath, source, parserLanguage));
+  }
+
+  return units;
 };
 
 export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport> => {
@@ -63,8 +157,11 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
     readFile = (path: string) => fsReadFile(path, "utf-8"),
     embeddingBatchSize = 64,
     parseConcurrency = 1,
+    comparisonLevels,
     onProgress,
   } = input;
+  const normalizedComparisonLevels = normalizeComparisonLevels(comparisonLevels);
+  const cacheKey = pipelineCacheKey(parser.cacheKey, normalizedComparisonLevels);
 
   if (!Number.isInteger(embeddingBatchSize) || embeddingBatchSize <= 0) {
     throw new CodigamiError("embeddingBatchSize must be a positive integer", {
@@ -83,7 +180,7 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
       files,
       hashStore,
       readFile,
-      cacheKey: parser.cacheKey,
+      cacheKey,
     });
     filesToProcess = changes.changed;
 
@@ -211,7 +308,14 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
         });
 
         const source = await readFile(file.absolutePath);
-        const units = await parser.parse(file.relativePath, source);
+        const parsedUnits = await parser.parse(file.relativePath, source);
+        const units = selectComparisonUnits(
+          parsedUnits,
+          file.relativePath,
+          source,
+          parser.language,
+          normalizedComparisonLevels,
+        );
         return { file, source, units };
       }),
     );
@@ -219,7 +323,7 @@ export const runPipeline = async (input: PipelineInput): Promise<DuplicateReport
     for (const { file, source, units } of results) {
       const state: ParsedFileState = {
         filePath: file.relativePath,
-        sourceHash: hashStore ? hashContent(source, parser.cacheKey) : undefined,
+        sourceHash: hashStore ? hashContent(source, cacheKey) : undefined,
         units,
         embeddings: new Map(),
         remainingEmbeddings: units.length,
