@@ -34,15 +34,16 @@ export const nameFromField = (node: Node): string | null => {
   return node.childForFieldName("name")?.text ?? null;
 };
 
-export const nameFromFirstChild = (...nodeTypes: string[]) => {
-  const types = new Set(nodeTypes);
-  return (node: Node): string | null => firstNamedChildOfType(node, types)?.text ?? null;
+const nameFromLookup = (lookup: (node: Node, types: ReadonlySet<string>) => Node | null) => {
+  return (...nodeTypes: string[]) => {
+    const types = new Set(nodeTypes);
+    return (node: Node): string | null => lookup(node, types)?.text ?? null;
+  };
 };
 
-export const nameFromFirstDescendant = (...nodeTypes: string[]) => {
-  const types = new Set(nodeTypes);
-  return (node: Node): string | null => firstDescendantOfType(node, types)?.text ?? null;
-};
+export const nameFromFirstChild = nameFromLookup(firstNamedChildOfType);
+
+export const nameFromFirstDescendant = nameFromLookup(firstDescendantOfType);
 
 export const nameFromDeclarator = (node: Node): string | null => {
   const declarator = node.childForFieldName("declarator") ?? node;
@@ -55,7 +56,8 @@ export const nameFromDeclarator = (node: Node): string | null => {
 };
 
 export const hasChildOfType = (nodeType: string) => {
-  return (node: Node): boolean => firstNamedChildOfType(node, new Set([nodeType])) !== null;
+  const types = new Set([nodeType]);
+  return (node: Node): boolean => firstNamedChildOfType(node, types) !== null;
 };
 
 const makeDisambiguatedUnitId = (unit: CodeUnit, occurrence: number): string => {
@@ -91,15 +93,15 @@ export const ensureUniqueCodeUnitIds = (units: CodeUnit[]): CodeUnit[] => {
   });
 };
 
-const toCodeUnit = (
+export const codeUnitFromNode = (
   node: Node,
   filePath: string,
   language: string,
-  rule: UnitExtractionRule,
+  unitType: string,
+  name: string | null = nameFromField(node),
 ): CodeUnit => {
   const startLine = node.startPosition.row + 1;
   const endLine = node.endPosition.row + 1;
-  const unitType = typeof rule.unitType === "function" ? rule.unitType(node) : rule.unitType;
 
   return {
     id: makeUnitId(filePath, startLine, endLine),
@@ -107,10 +109,26 @@ const toCodeUnit = (
     startLine,
     endLine,
     unitType,
-    name: rule.getName?.(node) ?? nameFromField(node),
+    name,
     source: node.text,
     language,
   };
+};
+
+const toRuleCodeUnit = (
+  node: Node,
+  filePath: string,
+  language: string,
+  rule: UnitExtractionRule,
+): CodeUnit => {
+  const unitType = typeof rule.unitType === "function" ? rule.unitType(node) : rule.unitType;
+  return codeUnitFromNode(
+    node,
+    filePath,
+    language,
+    unitType,
+    rule.getName?.(node) ?? nameFromField(node),
+  );
 };
 
 export const extractCodeUnitsByRules = (
@@ -129,7 +147,7 @@ export const extractCodeUnitsByRules = (
     );
 
     if (rule) {
-      units.push(toCodeUnit(node, filePath, language, rule));
+      units.push(toRuleCodeUnit(node, filePath, language, rule));
       if (!rule.descendIntoChildren) return;
     }
 

@@ -44,7 +44,37 @@ describe("extractCodeUnitsFromRootNode", () => {
       ["method_definition", "run", 8, 10],
     ]);
     expect(units[0].id).toBe(makeUnitId("example.ts", 1, 3));
+    expect(units[1]).toMatchObject({
+      id: makeUnitId("example.ts", 5, 5),
+      source: "const transform = (value: number) => value * 2;",
+    });
     expect(units.every((unit) => unit.filePath === "example.ts")).toBe(true);
     expect(units.every((unit) => unit.language === "typescript")).toBe(true);
+  });
+
+  it("does not extract nested function-like declarations from function bodies", () => {
+    const source = [
+      "export function outer() {",
+      "  const inner = () => true;",
+      "  function nested() {",
+      "    return false;",
+      "  }",
+      "}",
+      "",
+      "const top = function () {",
+      "  return true;",
+      "};",
+    ].join("\n");
+    const tree = parser.parse(source);
+
+    expect(tree).not.toBeNull();
+    const units = extractCodeUnitsFromRootNode(tree!.rootNode, "nested.ts", "typescript");
+
+    expect(units.map((unit) => [unit.unitType, unit.name, unit.startLine, unit.endLine])).toEqual([
+      ["function_declaration", "outer", 1, 6],
+      ["function_expression", "top", 8, 10],
+    ]);
+    expect(units.map((unit) => unit.name)).not.toContain("inner");
+    expect(units.map((unit) => unit.name)).not.toContain("nested");
   });
 });

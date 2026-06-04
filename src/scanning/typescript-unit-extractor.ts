@@ -1,6 +1,6 @@
 import type { Node } from "web-tree-sitter";
-import { type CodeUnit, makeUnitId } from "../types.ts";
-import { ensureUniqueCodeUnitIds } from "./tree-sitter-unit-extractor.ts";
+import type { CodeUnit } from "../types.ts";
+import { codeUnitFromNode, ensureUniqueCodeUnitIds } from "./tree-sitter-unit-extractor.ts";
 
 const EXTRACTABLE_TOP_LEVEL = new Set([
   "function_declaration",
@@ -31,19 +31,15 @@ const extractFromLexicalDeclaration = (
     const valueNode = declarator.childForFieldName("value");
     if (!valueNode || !isFunctionLike(valueNode)) continue;
 
-    const startLine = node.startPosition.row + 1;
-    const endLine = node.endPosition.row + 1;
-
-    units.push({
-      id: makeUnitId(filePath, startLine, endLine),
-      filePath,
-      startLine,
-      endLine,
-      unitType: valueNode.type === "arrow_function" ? "arrow_function" : "function_expression",
-      name: nameNode?.text ?? null,
-      source: node.text,
-      language,
-    });
+    units.push(
+      codeUnitFromNode(
+        node,
+        filePath,
+        language,
+        valueNode.type === "arrow_function" ? "arrow_function" : "function_expression",
+        nameNode?.text ?? null,
+      ),
+    );
   }
 
   return units;
@@ -57,88 +53,46 @@ const extractClassMembers = (classNode: Node, filePath: string, language: string
   for (const child of body.namedChildren) {
     if (child.type !== "method_definition") continue;
 
-    const nameNode = child.childForFieldName("name");
-    const startLine = child.startPosition.row + 1;
-    const endLine = child.endPosition.row + 1;
-
-    units.push({
-      id: makeUnitId(filePath, startLine, endLine),
-      filePath,
-      startLine,
-      endLine,
-      unitType: "method_definition",
-      name: nameNode?.text ?? null,
-      source: child.text,
-      language,
-    });
+    units.push(codeUnitFromNode(child, filePath, language, "method_definition"));
   }
 
   return units;
 };
 
-const extractNode = (node: Node, filePath: string, language: string): CodeUnit[] => {
-  const units: CodeUnit[] = [];
+const extractFromExportStatement = (node: Node, filePath: string, language: string): CodeUnit[] => {
+  const declaration = node.childForFieldName("declaration");
+  if (declaration) return extractNode(declaration, filePath, language);
 
+  return node.namedChildren.flatMap((child) =>
+    EXTRACTABLE_TOP_LEVEL.has(child.type) && child.type !== "export_statement"
+      ? extractNode(child, filePath, language)
+      : [],
+  );
+};
+
+const extractNode = (node: Node, filePath: string, language: string): CodeUnit[] => {
   switch (node.type) {
     case "function_declaration": {
-      const nameNode = node.childForFieldName("name");
-      const startLine = node.startPosition.row + 1;
-      const endLine = node.endPosition.row + 1;
-
-      units.push({
-        id: makeUnitId(filePath, startLine, endLine),
-        filePath,
-        startLine,
-        endLine,
-        unitType: "function_declaration",
-        name: nameNode?.text ?? null,
-        source: node.text,
-        language,
-      });
-      break;
+      return [codeUnitFromNode(node, filePath, language, "function_declaration")];
     }
 
     case "class_declaration": {
-      const nameNode = node.childForFieldName("name");
-      const startLine = node.startPosition.row + 1;
-      const endLine = node.endPosition.row + 1;
-
-      units.push({
-        id: makeUnitId(filePath, startLine, endLine),
-        filePath,
-        startLine,
-        endLine,
-        unitType: "class_declaration",
-        name: nameNode?.text ?? null,
-        source: node.text,
-        language,
-      });
-
-      units.push(...extractClassMembers(node, filePath, language));
-      break;
+      return [
+        codeUnitFromNode(node, filePath, language, "class_declaration"),
+        ...extractClassMembers(node, filePath, language),
+      ];
     }
 
     case "lexical_declaration": {
-      units.push(...extractFromLexicalDeclaration(node, filePath, language));
-      break;
+      return extractFromLexicalDeclaration(node, filePath, language);
     }
 
     case "export_statement": {
-      const declaration = node.childForFieldName("declaration");
-      if (declaration) {
-        units.push(...extractNode(declaration, filePath, language));
-      } else {
-        for (const child of node.namedChildren) {
-          if (EXTRACTABLE_TOP_LEVEL.has(child.type) && child.type !== "export_statement") {
-            units.push(...extractNode(child, filePath, language));
-          }
-        }
-      }
-      break;
+      return extractFromExportStatement(node, filePath, language);
     }
   }
 
-  return units;
+  return [];
 };
 
 export const extractCodeUnitsFromRootNode = (
@@ -146,13 +100,9 @@ export const extractCodeUnitsFromRootNode = (
   filePath: string,
   language: string,
 ): CodeUnit[] => {
-  const units: CodeUnit[] = [];
-
-  for (const child of rootNode.namedChildren) {
-    if (EXTRACTABLE_TOP_LEVEL.has(child.type)) {
-      units.push(...extractNode(child, filePath, language));
-    }
-  }
-
-  return ensureUniqueCodeUnitIds(units);
+  return ensureUniqueCodeUnitIds(
+    rootNode.namedChildren.flatMap((child) =>
+      EXTRACTABLE_TOP_LEVEL.has(child.type) ? extractNode(child, filePath, language) : [],
+    ),
+  );
 };
