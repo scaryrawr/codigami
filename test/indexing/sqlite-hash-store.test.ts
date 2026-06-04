@@ -1,15 +1,15 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
 import type { FileHashStore } from "../../src/types.ts";
 import { createSqliteHashStore } from "../../src/indexing/sqlite-hash-store.ts";
-import Database from "better-sqlite3";
+import { Database } from "bun:sqlite";
 
 describe("createSqliteHashStore", () => {
-  let db: InstanceType<typeof Database>;
+  let db: Database;
   let store: FileHashStore;
 
   afterEach(() => {
     store?.close();
-    if (db?.open) db.close();
+    db?.close();
   });
 
   it("creates table on initialization", () => {
@@ -97,12 +97,11 @@ describe("createSqliteHashStore", () => {
 
   describe("close", () => {
     it("does not close the shared database instance", () => {
-      db = new Database(":memory:");
+      db = new Database(":memory:", { strict: true });
       store = createSqliteHashStore(db);
       store.close();
 
-      // The shared db should still be usable
-      expect(db.open).toBe(true);
+      expect(() => db.prepare("SELECT 1").get()).not.toThrow();
     });
   });
 });

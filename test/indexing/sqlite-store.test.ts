@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import Database from "better-sqlite3";
+import { afterEach, describe, expect, it } from "bun:test";
+import { Database } from "bun:sqlite";
 import type { CodeUnit, IndexStore } from "../../src/types.ts";
 import {
   createSqliteStore,
@@ -20,11 +20,11 @@ const makeUnit = (overrides: Partial<CodeUnit> = {}): CodeUnit => ({
 
 describe("createSqliteStore", () => {
   let store: IndexStore;
-  let db: InstanceType<typeof Database> | undefined;
+  let db: Database | undefined;
 
   afterEach(() => {
     store?.close();
-    if (db?.open) db.close();
+    db?.close();
     db = undefined;
   });
 
@@ -323,12 +323,11 @@ describe("createSqliteStore", () => {
     });
 
     it("does not close the caller-owned database", () => {
-      db = new Database(":memory:");
+      db = new Database(":memory:", { strict: true });
       store = createSqliteStoreFromDatabase(db);
 
       store.close();
 
-      expect(db.open).toBe(true);
       expect(() => db!.prepare("SELECT 1").get()).not.toThrow();
     });
   });

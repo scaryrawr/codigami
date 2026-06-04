@@ -1,11 +1,10 @@
-import Database from "better-sqlite3";
+import { Database } from "bun:sqlite";
 import { type CodeUnit, type IndexStore, type StoredEmbedding } from "../types.ts";
-
-type SqliteDatabase = InstanceType<typeof Database>;
+import type { SqliteDatabase } from "./sqlite-database.ts";
 
 const initializeDatabase = (db: SqliteDatabase): void => {
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+  db.run("PRAGMA journal_mode = WAL");
+  db.run("PRAGMA foreign_keys = ON");
 };
 
 const createStore = (db: SqliteDatabase, closeDatabase: boolean): IndexStore => {
@@ -31,12 +30,12 @@ const createStore = (db: SqliteDatabase, closeDatabase: boolean): IndexStore => 
 
   const upsertUnit = db.prepare(`
     INSERT OR REPLACE INTO code_units (id, file_path, start_line, end_line, unit_type, name, source, language)
-    VALUES (@id, @filePath, @startLine, @endLine, @unitType, @name, @source, @language)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
   `);
 
   const upsertEmbedding = db.prepare(`
     INSERT OR REPLACE INTO embeddings (unit_id, vector)
-    VALUES (@unitId, @vector)
+    VALUES (?1, ?2)
   `);
 
   const selectAllWithEmbeddings = db.prepare(`
@@ -56,34 +55,52 @@ const createStore = (db: SqliteDatabase, closeDatabase: boolean): IndexStore => 
 
   const upsertUnits = db.transaction((units: CodeUnit[]) => {
     for (const unit of units) {
-      upsertUnit.run(unit);
+      upsertUnit.run(
+        unit.id,
+        unit.filePath,
+        unit.startLine,
+        unit.endLine,
+        unit.unitType,
+        unit.name,
+        unit.source,
+        unit.language,
+      );
     }
   });
 
-  const deleteByFilePath = db.prepare("DELETE FROM code_units WHERE file_path = @filePath");
+  const deleteByFilePath = db.prepare("DELETE FROM code_units WHERE file_path = ?1");
 
   const storeEmbeddings = db.transaction((entries: StoredEmbedding[]) => {
     for (const entry of entries) {
       const float32 = new Float32Array(entry.embedding);
-      const vector = Buffer.from(float32.buffer);
-      upsertEmbedding.run({ unitId: entry.unitId, vector });
+      const vector = new Uint8Array(float32.buffer);
+      upsertEmbedding.run(entry.unitId, vector);
     }
   });
 
   const replaceFileUnitsWithEmbeddings = db.transaction(
     (filePaths: string[], units: CodeUnit[], entries: StoredEmbedding[]) => {
       for (const filePath of filePaths) {
-        deleteByFilePath.run({ filePath });
+        deleteByFilePath.run(filePath);
       }
 
       for (const unit of units) {
-        upsertUnit.run(unit);
+        upsertUnit.run(
+          unit.id,
+          unit.filePath,
+          unit.startLine,
+          unit.endLine,
+          unit.unitType,
+          unit.name,
+          unit.source,
+          unit.language,
+        );
       }
 
       for (const entry of entries) {
         const float32 = new Float32Array(entry.embedding);
-        const vector = Buffer.from(float32.buffer);
-        upsertEmbedding.run({ unitId: entry.unitId, vector });
+        const vector = new Uint8Array(float32.buffer);
+        upsertEmbedding.run(entry.unitId, vector);
       }
     },
   );
@@ -98,7 +115,7 @@ const createStore = (db: SqliteDatabase, closeDatabase: boolean): IndexStore => 
       name: string | null;
       source: string;
       language: string;
-      vector: Buffer;
+      vector: Uint8Array;
     }>;
 
     return rows.map((row) => ({
@@ -124,7 +141,7 @@ const createStore = (db: SqliteDatabase, closeDatabase: boolean): IndexStore => 
 
   const deleteByFilePaths = db.transaction((filePaths: string[]) => {
     for (const filePath of filePaths) {
-      deleteByFilePath.run({ filePath });
+      deleteByFilePath.run(filePath);
     }
   });
 
@@ -133,7 +150,7 @@ const createStore = (db: SqliteDatabase, closeDatabase: boolean): IndexStore => 
   };
 
   const close = (): void => {
-    if (closeDatabase && db.open) {
+    if (closeDatabase) {
       db.close();
     }
   };
@@ -154,5 +171,5 @@ export const createSqliteStoreFromDatabase = (db: SqliteDatabase): IndexStore =>
 };
 
 export const createSqliteStore = (dbPath: string): IndexStore => {
-  return createStore(new Database(dbPath), true);
+  return createStore(new Database(dbPath, { strict: true }), true);
 };

@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "bun:test";
 import { Parser } from "web-tree-sitter";
 import { createTypescriptParser } from "../../src/scanning/typescript-parser.ts";
 import type { LanguageParser } from "../../src/types.ts";

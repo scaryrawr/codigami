@@ -1,13 +1,13 @@
 import { parseArgs } from "node:util";
 import { dirname, resolve } from "node:path";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { Parser } from "web-tree-sitter";
-import Database from "better-sqlite3";
 import { commonDirectory, walkDirectories } from "./scanning/file-walker.ts";
 import { createDefaultLanguageParser } from "./scanning/multi-language-parser.ts";
 import { createOpenAIEmbeddingProvider } from "./embedding/openai-embedding-provider.ts";
 import { createSqliteStoreFromDatabase } from "./indexing/sqlite-store.ts";
 import { createSqliteHashStore } from "./indexing/sqlite-hash-store.ts";
+import { openSqliteDatabase, type SqliteDatabase } from "./indexing/sqlite-database.ts";
 import { runPipeline } from "./pipeline.ts";
 import {
   CodigamiError,
@@ -21,6 +21,34 @@ import {
 const DEFAULT_ENDPOINT = "http://localhost:14982/v1";
 const DEFAULT_MODEL = "jina-code-embeddings-1.5b-mlx";
 const DEFAULT_THRESHOLD = 0.8;
+
+export interface CliDependencies {
+  mkdir: typeof mkdir;
+  writeFile: typeof writeFile;
+  initParser: () => Promise<void>;
+  commonDirectory: typeof commonDirectory;
+  walkDirectories: typeof walkDirectories;
+  createDefaultLanguageParser: typeof createDefaultLanguageParser;
+  createOpenAIEmbeddingProvider: typeof createOpenAIEmbeddingProvider;
+  openSqliteDatabase: typeof openSqliteDatabase;
+  createSqliteStoreFromDatabase: typeof createSqliteStoreFromDatabase;
+  createSqliteHashStore: typeof createSqliteHashStore;
+  runPipeline: typeof runPipeline;
+}
+
+const defaultDependencies: CliDependencies = {
+  mkdir,
+  writeFile,
+  initParser: () => Parser.init(),
+  commonDirectory,
+  walkDirectories,
+  createDefaultLanguageParser,
+  createOpenAIEmbeddingProvider,
+  openSqliteDatabase,
+  createSqliteStoreFromDatabase,
+  createSqliteHashStore,
+  runPipeline,
+};
 
 const parseThreshold = (value: string): number | undefined => {
   const trimmed = value.trim();
@@ -49,7 +77,12 @@ const parseComparisonLevels = (values: string[] | undefined): ComparisonLevel[] 
   return levels.length > 0 ? Array.from(new Set(levels)) : undefined;
 };
 
-export const main = async (argv: string[] = process.argv.slice(2)): Promise<void> => {
+export const main = async (
+  argv: string[] = process.argv.slice(2),
+  dependencies: CliDependencies = defaultDependencies,
+): Promise<void> => {
+  process.exitCode = 0;
+
   const { values } = parseArgs({
     args: argv,
     options: {
@@ -106,37 +139,37 @@ Options:
   const defaultDbDirectory =
     firstDirectory !== undefined && secondDirectory === undefined
       ? firstDirectory
-      : commonDirectory(directories);
+      : dependencies.commonDirectory(directories);
   const dbPath = values.db || resolve(defaultDbDirectory, ".codigami", "index.db");
 
   // Ensure .codigami directory exists
   const dbDir = dirname(dbPath);
-  await mkdir(dbDir, { recursive: true });
+  await dependencies.mkdir(dbDir, { recursive: true });
 
   // Initialize tree-sitter
-  await Parser.init();
+  await dependencies.initParser();
 
-  const parser = await createDefaultLanguageParser();
-  const embeddingProvider = createOpenAIEmbeddingProvider({
+  const parser = await dependencies.createDefaultLanguageParser();
+  const embeddingProvider = dependencies.createOpenAIEmbeddingProvider({
     baseURL: values.endpoint!,
     model: values.model!,
   });
 
   let store: IndexStore | undefined;
-  let database: InstanceType<typeof Database> | undefined;
+  let database: SqliteDatabase | undefined;
   let hashStore: FileHashStore | undefined;
 
   try {
-    database = new Database(dbPath);
-    store = createSqliteStoreFromDatabase(database);
+    database = dependencies.openSqliteDatabase(dbPath);
+    store = dependencies.createSqliteStoreFromDatabase(database);
     if (!values.full) {
-      hashStore = createSqliteHashStore(database);
+      hashStore = dependencies.createSqliteHashStore(database);
     }
 
-    const files = await walkDirectories(directories, [...parser.extensions]);
+    const files = await dependencies.walkDirectories(directories, [...parser.extensions]);
     console.error(`Found ${files.length} file(s) to scan...`);
 
-    const report = await runPipeline({
+    const report = await dependencies.runPipeline({
       files,
       parser,
       embeddingProvider,
@@ -170,8 +203,7 @@ Options:
     const json = JSON.stringify(report, null, 2);
 
     if (values.output) {
-      const { writeFile } = await import("node:fs/promises");
-      await writeFile(values.output, json, "utf-8");
+      await dependencies.writeFile(values.output, json, "utf-8");
       console.error(`Report written to ${values.output}`);
     } else {
       console.log(json);
@@ -196,8 +228,6 @@ Options:
   } finally {
     hashStore?.close();
     store?.close();
-    if (database?.open) {
-      database.close();
-    }
+    database?.close();
   }
 };

@@ -20,12 +20,28 @@ export interface LazyTypescriptParserLoader {
   getParserForFilePath(filePath: string): Promise<Parser>;
 }
 
-export const createLazyTypescriptParserLoader = (): LazyTypescriptParserLoader => {
+export interface LazyTypescriptParserLoaderDependencies {
+  loadLanguage(wasmPath: string): Promise<Language>;
+  createParser(): Parser;
+  resolveWasmModule(wasmModule: string): string;
+}
+
+const defaultDependencies: LazyTypescriptParserLoaderDependencies = {
+  loadLanguage: (wasmPath: string) => Language.load(wasmPath),
+  createParser: () => new Parser(),
+  resolveWasmModule: (wasmModule: string) => require.resolve(wasmModule),
+};
+
+export const createLazyTypescriptParserLoader = (
+  dependencies: LazyTypescriptParserLoaderDependencies = defaultDependencies,
+): LazyTypescriptParserLoader => {
   const parserByVariant = new Map<TypescriptParserVariant, Promise<Parser>>();
 
   const loadParser = async (variant: TypescriptParserVariant): Promise<Parser> => {
-    const language = await Language.load(require.resolve(WASM_MODULE_BY_VARIANT[variant]));
-    const parser = new Parser();
+    const language = await dependencies.loadLanguage(
+      dependencies.resolveWasmModule(WASM_MODULE_BY_VARIANT[variant]),
+    );
+    const parser = dependencies.createParser();
     parser.setLanguage(language);
     return parser;
   };

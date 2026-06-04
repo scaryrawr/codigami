@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "bun:test";
 import { Language, Parser } from "web-tree-sitter";
 import { extractCodeUnitsFromRootNode } from "../../src/scanning/typescript-unit-extractor.ts";
 import { makeUnitId } from "../../src/types.ts";

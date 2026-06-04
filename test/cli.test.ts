@@ -1,19 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { main } from "../src/cli.ts";
 
-const mocks = vi.hoisted(() => {
+const mocks = (() => {
+  const databaseInstances: MockDatabase[] = [];
   class MockDatabase {
-    static instances: MockDatabase[] = [];
-
     readonly path: string;
-    open = true;
-    close = vi.fn(() => {
-      this.open = false;
-    });
+    close = vi.fn(() => {});
 
     constructor(path: string) {
       this.path = path;
-      MockDatabase.instances.push(this);
+      databaseInstances.push(this);
     }
   }
 
@@ -26,6 +22,7 @@ const mocks = vi.hoisted(() => {
   const indexStores: Array<{
     upsertUnits: ReturnType<typeof vi.fn>;
     storeEmbeddings: ReturnType<typeof vi.fn>;
+    replaceFileUnitsWithEmbeddings: ReturnType<typeof vi.fn>;
     getAllWithEmbeddings: ReturnType<typeof vi.fn<() => []>>;
     deleteByFilePaths: ReturnType<typeof vi.fn>;
     clear: ReturnType<typeof vi.fn>;
@@ -47,6 +44,7 @@ const mocks = vi.hoisted(() => {
     MockDatabase,
     hashStores,
     indexStores,
+    databaseInstances,
     mkdir: vi.fn(async () => {}),
     writeFile: vi.fn(async () => {}),
     parserInit: vi.fn(async () => {}),
@@ -58,10 +56,12 @@ const mocks = vi.hoisted(() => {
       parse: vi.fn(),
     })),
     createOpenAIEmbeddingProvider: vi.fn(() => ({ embed: vi.fn() })),
+    openSqliteDatabase: vi.fn((dbPath: string) => new MockDatabase(dbPath)),
     createSqliteStoreFromDatabase: vi.fn(() => {
       const store = {
         upsertUnits: vi.fn(),
         storeEmbeddings: vi.fn(),
+        replaceFileUnitsWithEmbeddings: vi.fn(),
         getAllWithEmbeddings: vi.fn(() => []),
         deleteByFilePaths: vi.fn(),
         clear: vi.fn(),
@@ -79,51 +79,27 @@ const mocks = vi.hoisted(() => {
       timestamp: "2026-05-08T00:00:00.000Z",
     })),
   };
-});
+})();
 
-vi.mock("node:fs/promises", () => ({
+const createDependencies = () => ({
   mkdir: mocks.mkdir,
   writeFile: mocks.writeFile,
-}));
-
-vi.mock("web-tree-sitter", () => ({
-  Parser: { init: mocks.parserInit },
-}));
-
-vi.mock("better-sqlite3", () => ({
-  default: mocks.MockDatabase,
-}));
-
-vi.mock("../src/scanning/file-walker.ts", () => ({
+  initParser: mocks.parserInit,
   commonDirectory: mocks.commonDirectory,
   walkDirectories: mocks.walkDirectories,
-}));
-
-vi.mock("../src/scanning/multi-language-parser.ts", () => ({
   createDefaultLanguageParser: mocks.createDefaultLanguageParser,
-}));
-
-vi.mock("../src/embedding/openai-embedding-provider.ts", () => ({
   createOpenAIEmbeddingProvider: mocks.createOpenAIEmbeddingProvider,
-}));
-
-vi.mock("../src/indexing/sqlite-store.ts", () => ({
+  openSqliteDatabase: mocks.openSqliteDatabase,
   createSqliteStoreFromDatabase: mocks.createSqliteStoreFromDatabase,
-}));
-
-vi.mock("../src/indexing/sqlite-hash-store.ts", () => ({
   createSqliteHashStore: mocks.createSqliteHashStore,
-}));
-
-vi.mock("../src/pipeline.ts", () => ({
   runPipeline: mocks.runPipeline,
-}));
+});
 
 describe("main", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.exitCode = undefined;
-    mocks.MockDatabase.instances.length = 0;
+    process.exitCode = 0;
+    mocks.databaseInstances.length = 0;
     mocks.hashStores.length = 0;
     mocks.indexStores.length = 0;
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -132,11 +108,11 @@ describe("main", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    process.exitCode = undefined;
+    process.exitCode = 0;
   });
 
   it("rejects an invalid threshold before scanning or opening stores", async () => {
-    await main(["--threshold", "abc"]);
+    await main(["--threshold", "abc"], createDependencies());
 
     expect(process.exitCode).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
@@ -144,11 +120,11 @@ describe("main", () => {
     );
     expect(mocks.parserInit).not.toHaveBeenCalled();
     expect(mocks.createSqliteStoreFromDatabase).not.toHaveBeenCalled();
-    expect(mocks.MockDatabase.instances).toHaveLength(0);
+    expect(mocks.databaseInstances).toHaveLength(0);
   });
 
   it.each(["-0.1", "1.1"])("rejects out-of-range threshold %s", async (threshold) => {
-    await main([`--threshold=${threshold}`]);
+    await main([`--threshold=${threshold}`], createDependencies());
 
     expect(process.exitCode).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
@@ -158,7 +134,7 @@ describe("main", () => {
   });
 
   it("rejects invalid comparison levels before scanning or opening stores", async () => {
-    await main(["--level", "package"]);
+    await main(["--level", "package"], createDependencies());
 
     expect(process.exitCode).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
@@ -166,18 +142,17 @@ describe("main", () => {
     );
     expect(mocks.parserInit).not.toHaveBeenCalled();
     expect(mocks.createSqliteStoreFromDatabase).not.toHaveBeenCalled();
-    expect(mocks.MockDatabase.instances).toHaveLength(0);
+    expect(mocks.databaseInstances).toHaveLength(0);
   });
 
-  it("uses one shared database connection for the index and hash stores", async () => {
-    await main(["--threshold", "0.75"]);
+  it("uses one shared Bun sqlite connection for the index and hash stores", async () => {
+    await main(["--threshold", "0.75"], createDependencies());
 
-    expect(process.exitCode).toBeUndefined();
-    expect(mocks.MockDatabase.instances).toHaveLength(1);
-    expect(mocks.createSqliteStoreFromDatabase).toHaveBeenCalledWith(
-      mocks.MockDatabase.instances[0],
-    );
-    expect(mocks.createSqliteHashStore).toHaveBeenCalledWith(mocks.MockDatabase.instances[0]);
+    expect(process.exitCode).toBe(0);
+    expect(mocks.databaseInstances).toHaveLength(1);
+    expect(mocks.openSqliteDatabase).toHaveBeenCalledWith(expect.stringContaining("index.db"));
+    expect(mocks.createSqliteStoreFromDatabase).toHaveBeenCalledWith(mocks.databaseInstances[0]);
+    expect(mocks.createSqliteHashStore).toHaveBeenCalledWith(mocks.databaseInstances[0]);
     expect(mocks.walkDirectories).toHaveBeenCalledWith([expect.any(String)], [".ts", ".rs", ".py"]);
     expect(mocks.runPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -189,14 +164,13 @@ describe("main", () => {
     );
     expect(mocks.indexStores[0].close).toHaveBeenCalledTimes(1);
     expect(mocks.hashStores[0].close).toHaveBeenCalledTimes(1);
-    expect(mocks.MockDatabase.instances[0].close).toHaveBeenCalledTimes(1);
-    expect(mocks.MockDatabase.instances[0].open).toBe(false);
+    expect(mocks.databaseInstances[0].close).toHaveBeenCalledTimes(1);
   });
 
   it("accepts repeated directory arguments and scans them together", async () => {
-    await main(["--dir", "packages/a", "--dir", "packages/b"]);
+    await main(["--dir", "packages/a", "--dir", "packages/b"], createDependencies());
 
-    expect(process.exitCode).toBeUndefined();
+    expect(process.exitCode).toBe(0);
     expect(mocks.walkDirectories).toHaveBeenCalledWith(
       [expect.stringContaining("packages/a"), expect.stringContaining("packages/b")],
       [".ts", ".rs", ".py"],
@@ -209,9 +183,9 @@ describe("main", () => {
   });
 
   it("passes repeated and comma-separated comparison levels to the pipeline", async () => {
-    await main(["--level", "function,class", "--level", "file"]);
+    await main(["--level", "function,class", "--level", "file"], createDependencies());
 
-    expect(process.exitCode).toBeUndefined();
+    expect(process.exitCode).toBe(0);
     expect(mocks.runPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
         comparisonLevels: ["function", "class", "file"],

@@ -1,7 +1,7 @@
-import Database from "better-sqlite3";
+import { Database } from "bun:sqlite";
 import type { FileHashStore } from "../types.ts";
 
-export const createSqliteHashStore = (db: InstanceType<typeof Database>): FileHashStore => {
+export const createSqliteHashStore = (db: Database): FileHashStore => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS file_hashes (
       file_path TEXT PRIMARY KEY,
@@ -11,12 +11,12 @@ export const createSqliteHashStore = (db: InstanceType<typeof Database>): FileHa
 
   const upsertHash = db.prepare(`
     INSERT OR REPLACE INTO file_hashes (file_path, content_hash)
-    VALUES (@filePath, @contentHash)
+    VALUES (?1, ?2)
   `);
 
   const selectAll = db.prepare("SELECT file_path, content_hash FROM file_hashes");
 
-  const deleteByPath = db.prepare("DELETE FROM file_hashes WHERE file_path = @filePath");
+  const deleteByPath = db.prepare("DELETE FROM file_hashes WHERE file_path = ?1");
 
   const getHashes = (): Map<string, string> => {
     const rows = selectAll.all() as Array<{ file_path: string; content_hash: string }>;
@@ -28,12 +28,12 @@ export const createSqliteHashStore = (db: InstanceType<typeof Database>): FileHa
   };
 
   const setHash = (filePath: string, hash: string): void => {
-    upsertHash.run({ filePath, contentHash: hash });
+    upsertHash.run(filePath, hash);
   };
 
   const removeFiles = db.transaction((filePaths: string[]) => {
     for (const filePath of filePaths) {
-      deleteByPath.run({ filePath });
+      deleteByPath.run(filePath);
     }
   });
 

@@ -1,36 +1,23 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
 
-const mocks = vi.hoisted(() => {
-  return {
-    languageLoad: vi.fn(async (path: string) => ({ path })),
-    setLanguage: vi.fn(),
-    treeDelete: vi.fn(),
-    parse: vi.fn((_source: string) => ({
-      rootNode: { type: "program" },
-      delete: mocks.treeDelete,
-    })),
-    extract: vi.fn(() => []),
-  };
-});
+import { createMultiLanguageParser } from "../../src/scanning/multi-language-parser.ts";
 
-vi.mock("web-tree-sitter", () => {
-  class MockParser {
-    setLanguage(language: unknown): void {
-      mocks.setLanguage(language);
-    }
+const mocks = {
+  languageLoad: vi.fn(async (path: string) => ({ path })),
+  setLanguage: vi.fn(),
+  treeDelete: vi.fn(),
+  parse: vi.fn((_source: string) => ({
+    rootNode: { type: "program" },
+    delete: mocks.treeDelete,
+  })),
+  extract: vi.fn(() => []),
+};
 
-    parse(source: string): { rootNode: { type: string }; delete: () => void } {
-      return mocks.parse(source);
-    }
-  }
-
-  return {
-    Parser: MockParser,
-    Language: {
-      load: mocks.languageLoad,
-    },
-  };
-});
+const createParser = () =>
+  ({
+    setLanguage: mocks.setLanguage,
+    parse: mocks.parse,
+  }) as never;
 
 describe("createMultiLanguageParser resource management", () => {
   beforeEach(() => {
@@ -38,16 +25,21 @@ describe("createMultiLanguageParser resource management", () => {
   });
 
   it("deletes parse trees after extraction", async () => {
-    const { createMultiLanguageParser } =
-      await import("../../src/scanning/multi-language-parser.ts");
-    const parser = await createMultiLanguageParser([
+    const parser = await createMultiLanguageParser(
+      [
+        {
+          language: "test",
+          extensions: [".test"],
+          wasmModule: "tree-sitter-typescript/tree-sitter-typescript.wasm",
+          extract: mocks.extract as never,
+        },
+      ],
       {
-        language: "test",
-        extensions: [".test"],
-        wasmModule: "tree-sitter-typescript/tree-sitter-typescript.wasm",
-        extract: mocks.extract,
+        loadLanguage: mocks.languageLoad as never,
+        createParser,
+        resolveWasmModule: (wasmModule) => wasmModule,
       },
-    ]);
+    );
 
     await parser.parse("example.test", "source");
 
@@ -56,16 +48,21 @@ describe("createMultiLanguageParser resource management", () => {
   });
 
   it("deletes parse trees when extraction throws", async () => {
-    const { createMultiLanguageParser } =
-      await import("../../src/scanning/multi-language-parser.ts");
-    const parser = await createMultiLanguageParser([
+    const parser = await createMultiLanguageParser(
+      [
+        {
+          language: "test",
+          extensions: [".test"],
+          wasmModule: "tree-sitter-typescript/tree-sitter-typescript.wasm",
+          extract: mocks.extract as never,
+        },
+      ],
       {
-        language: "test",
-        extensions: [".test"],
-        wasmModule: "tree-sitter-typescript/tree-sitter-typescript.wasm",
-        extract: mocks.extract,
+        loadLanguage: mocks.languageLoad as never,
+        createParser,
+        resolveWasmModule: (wasmModule) => wasmModule,
       },
-    ]);
+    );
     mocks.extract.mockImplementationOnce(() => {
       throw new Error("extract failed");
     });

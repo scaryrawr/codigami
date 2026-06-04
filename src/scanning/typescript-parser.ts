@@ -1,11 +1,22 @@
 import { type CodeUnit, type LanguageParser } from "../types.ts";
-import { createLazyTypescriptParserLoader } from "./typescript-parser-loader.ts";
+import {
+  createLazyTypescriptParserLoader,
+  type LazyTypescriptParserLoader,
+} from "./typescript-parser-loader.ts";
 import { extractCodeUnitsFromRootNode } from "./typescript-unit-extractor.ts";
 
 export const TYPESCRIPT_PARSER_CACHE_KEY = "typescript-parser:v2:tsx-grammar:unique-unit-ids";
 
-export const createTypescriptParser = async (): Promise<LanguageParser> => {
-  const parserLoader = createLazyTypescriptParserLoader();
+export interface TypescriptParserDependencies {
+  parserLoader?: LazyTypescriptParserLoader;
+  extractCodeUnitsFromRootNode?: typeof extractCodeUnitsFromRootNode;
+}
+
+export const createTypescriptParser = async (
+  dependencies: TypescriptParserDependencies = {},
+): Promise<LanguageParser> => {
+  const parserLoader = dependencies.parserLoader ?? createLazyTypescriptParserLoader();
+  const extract = dependencies.extractCodeUnitsFromRootNode ?? extractCodeUnitsFromRootNode;
   const lang = "typescript";
 
   return {
@@ -19,7 +30,7 @@ export const createTypescriptParser = async (): Promise<LanguageParser> => {
       if (!tree) return [];
 
       try {
-        return extractCodeUnitsFromRootNode(tree.rootNode, filePath, lang);
+        return extract(tree.rootNode, filePath, lang);
       } finally {
         tree.delete();
       }

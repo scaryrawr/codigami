@@ -150,39 +150,39 @@ The CLI prints a JSON report to stdout, or writes it to `--output` if provided.
 From this repository:
 
 ```bash
-npm install
-npm run build
+bun install
+bun run typecheck
 ```
 
 ## Usage
 
 ```bash
 # Scan the current directory with defaults
-npx codigami
+bunx codigami
 
 # Scan a specific directory with a custom threshold
-npx codigami --dir ./src --threshold 0.85
+bunx codigami --dir ./src --threshold 0.85
 
 # Scan related directories together
-npx codigami --dir ./packages/foo --dir ./packages/bar
+bunx codigami --dir ./packages/foo --dir ./packages/bar
 
 # Use a different OpenAI-compatible embedding endpoint/model
-npx codigami --endpoint http://localhost:14982/v1 --model jina-code-embeddings-1.5b-mlx
+bunx codigami --endpoint http://localhost:14982/v1 --model jina-code-embeddings-1.5b-mlx
 
 # Write report to a file instead of stdout
-npx codigami --output report.json
+bunx codigami --output report.json
 
 # Ignore file hashes and reprocess discovered files
-npx codigami --full
+bunx codigami --full
 
 # Compare both function and class-level units
-npx codigami --level function,class
+bunx codigami --level function,class
 
 # Compare whole-file units
-npx codigami --level file
+bunx codigami --level file
 
 # Use a custom SQLite database path
-npx codigami --db /tmp/codigami-index.db
+bunx codigami --db /tmp/codigami-index.db
 ```
 
 ### CLI Options
@@ -296,17 +296,17 @@ src/
 ## Development
 
 ```bash
-npm run typecheck   # Type-check with tsgo
-npm run build       # Compile with tsgo
-npm run test        # Run tests with Vitest
-npm run test:watch  # Watch mode
-npm run lint        # Lint with oxlint
-npm run lint:fix    # Lint and auto-fix where possible
-npm run fmt         # Format with oxfmt
-npm run fmt:check   # Check formatting
+bun run typecheck   # Type-check with tsgo
+bun run build       # Compatibility alias for typecheck
+bun run test        # Run tests with Bun
+bun run test:watch  # Watch mode
+bun run lint        # Lint with oxlint
+bun run lint:fix    # Lint and auto-fix where possible
+bun run fmt         # Format with oxfmt
+bun run fmt:check   # Check formatting
 ```
 
-Run `npm run typecheck` and `npm run test` before committing.
+Run `bun run typecheck` and `bun run test` before committing.
 
 ## License
 

@@ -1,12 +1,12 @@
 ---
 name: test-conventions
-description: Codigami Vitest conventions
+description: Codigami Bun test conventions
 applyTo: "test/**/*.ts"
 ---
 
 # Test Conventions
 
-Use Vitest `describe` / `it` / `expect` APIs and import `vi` only when mocks are needed.
+Use `describe` / `it` / `expect` from `bun:test` and import `vi` only when mocks are needed.
 
 Keep tests deterministic: mock embedding providers and stores, use temporary directories for filesystem behavior, and never call real embedding endpoints.
 

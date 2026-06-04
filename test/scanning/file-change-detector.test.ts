@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import type { FileHashStore } from "../../src/types.ts";
 import { detectFileChanges } from "../../src/scanning/file-change-detector.ts";
 import type { DiscoveredFile } from "../../src/scanning/file-walker.ts";

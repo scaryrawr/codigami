@@ -29,6 +29,18 @@ interface LoadedLanguageParser {
   parse(filePath: string, source: string): CodeUnit[];
 }
 
+interface TreeSitterParserDependencies {
+  loadLanguage(wasmPath: string): Promise<Language>;
+  createParser(): Parser;
+  resolveWasmModule(wasmModule: string): string;
+}
+
+const defaultParserDependencies: TreeSitterParserDependencies = {
+  loadLanguage: (wasmPath: string) => Language.load(wasmPath),
+  createParser: () => new Parser(),
+  resolveWasmModule: (wasmModule: string) => require.resolve(wasmModule),
+};
+
 const nameFromRustImpl = (node: Node): string | null => {
   return (
     node.childForFieldName("type")?.text ??
@@ -226,9 +238,12 @@ const createLanguageParserCacheKey = (
 
 const loadLanguageParser = async (
   definition: TreeSitterLanguageDefinition,
+  dependencies: TreeSitterParserDependencies,
 ): Promise<LoadedLanguageParser> => {
-  const language = await Language.load(require.resolve(definition.wasmModule));
-  const parser = new Parser();
+  const language = await dependencies.loadLanguage(
+    dependencies.resolveWasmModule(definition.wasmModule),
+  );
+  const parser = dependencies.createParser();
   parser.setLanguage(language);
 
   return {
@@ -260,6 +275,7 @@ const loadLanguageParser = async (
 
 export const createMultiLanguageParser = async (
   definitions: readonly TreeSitterLanguageDefinition[] = DEFAULT_LANGUAGE_DEFINITIONS,
+  dependencies: TreeSitterParserDependencies = defaultParserDependencies,
 ): Promise<LanguageParser> => {
   const definitionByExtension = new Map<string, TreeSitterLanguageDefinition>();
   const parserLoadByDefinition = new Map<
@@ -283,7 +299,7 @@ export const createMultiLanguageParser = async (
     const existing = parserLoadByDefinition.get(definition);
     if (existing) return existing;
 
-    const loading = loadLanguageParser(definition);
+    const loading = loadLanguageParser(definition, dependencies);
     parserLoadByDefinition.set(definition, loading);
     return loading;
   };

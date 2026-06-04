@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { readdir, stat } from "node:fs/promises";
+import { readdir, realpath, stat } from "node:fs/promises";
 import { extname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
@@ -46,18 +46,24 @@ const toGitRelativePath = (repositoryRoot: string, path: string): string =>
 const createGitIgnoreChecker = async (
   rootDir: string,
 ): Promise<(paths: string[]) => Promise<Set<string>>> => {
+  const canonicalRootDir = await realpath(rootDir);
   let repositoryRoot: string;
 
   try {
-    const { stdout } = await execFileAsync("git", ["-C", rootDir, "rev-parse", "--show-toplevel"]);
-    repositoryRoot = stdout.trim();
+    const { stdout } = await execFileAsync("git", [
+      "-C",
+      canonicalRootDir,
+      "rev-parse",
+      "--show-toplevel",
+    ]);
+    repositoryRoot = await realpath(stdout.trim());
   } catch (error) {
     if (hasExactExitCode(error, 128)) {
       return async () => new Set();
     }
 
     throw new CodigamiError("Failed to locate git repository for gitignore evaluation", {
-      rootDir,
+      rootDir: canonicalRootDir,
       command: "git rev-parse --show-toplevel",
       cause: formatErrorDetails(error),
     });
@@ -71,7 +77,7 @@ const createGitIgnoreChecker = async (
     const absolutePathMap = new Map<string, string>();
 
     for (const path of paths) {
-      const relativePath = toGitRelativePath(repositoryRoot, path);
+      const relativePath = toGitRelativePath(repositoryRoot, await realpath(path));
       const cached = ignoredPaths.get(relativePath);
       if (cached === true) {
         ignored.add(path);

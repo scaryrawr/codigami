@@ -5,18 +5,18 @@ Embeddings-based tool for identifying semantically and intent-equivalent duplica
 ## Commands
 
 ```bash
-npm install         # install dependencies
-npm run typecheck   # tsgo --noEmit
-npm run build       # tsgo
-npm run test        # vitest run
-npm run test:watch  # vitest
-npm run lint        # oxlint .
-npm run lint:fix    # oxlint . --fix
-npm run fmt         # oxfmt .
-npm run fmt:check   # oxfmt . --check
+bun install         # install dependencies
+bun run typecheck   # tsgo --noEmit
+bun run build       # compatibility alias for typecheck
+bun run test        # bun test
+bun run test:watch  # bun test --watch
+bun run lint        # oxlint .
+bun run lint:fix    # oxlint . --fix
+bun run fmt         # oxfmt .
+bun run fmt:check   # oxfmt . --check
 ```
 
-Run `typecheck` + `test` before committing. Use `fmt:check` for CI-style validation. For narrow checks, run a single Vitest file with `npm run test -- test/path/to/file.test.ts`.
+Run `typecheck` + `test` before committing. Use `fmt:check` for CI-style validation. For narrow checks, run a single Bun test file with `bun run test test/path/to/file.test.ts`.
 
 ## Architecture
 
@@ -35,13 +35,13 @@ Core modules:
 | `src/matching`    | Cosine similarity, duplicate pair detection, and union-find clustering                                  |
 | `src/output`      | JSON report formatting                                                                                  |
 
-Keep each module focused on one responsibility. Prefer narrow interfaces and dependency injection over direct imports between modules; the CLI is the main composition root for concrete providers and stores. The package publishes from `dist/`; edit `src/` and let `npm run build` generate output.
+Keep each module focused on one responsibility. Prefer narrow interfaces and dependency injection over direct imports between modules; the CLI is the main composition root for concrete providers and stores. The package runs TypeScript source directly on Bun; edit `src/` and use `bun run typecheck` instead of generating `dist/`.
 
 ## TDD
 
 - **Write the test first.** Every feature, utility, or module starts with a failing test.
 - **Keep tests fast and deterministic.** Mock external calls, embedding providers, and file I/O in unit tests; use temporary directories for filesystem behavior.
-- **Prefer `describe` / `it` with Vitest.** Use `expect` with matchers; avoid `assert` imports.
+- **Prefer `describe` / `it` from `bun:test`.** Use `expect` with matchers; avoid `assert` imports.
 - **Test behavior, not implementation.** Assert on public API outcomes, not internal state or exact call counts.
 - **Edge cases first.** Null sources, empty chunks, missing embeddings, and malformed files should be tested before happy paths.
 

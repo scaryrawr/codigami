@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import OpenAI from "openai";
 import { CodigamiError } from "../../src/types.ts";
 import { createOpenAIEmbeddingProvider } from "../../src/embedding/openai-embedding-provider.ts";

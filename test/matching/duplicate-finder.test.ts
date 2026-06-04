@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { clusterDuplicates, findDuplicatePairs } from "../../src/matching/duplicate-finder.ts";
 import type { CodeUnit, DuplicatePair } from "../../src/types.ts";
 
