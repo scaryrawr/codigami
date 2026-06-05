@@ -54,21 +54,29 @@ interface BufferedUnit {
 
 const FUNCTION_UNIT_TYPES = new Set([
   "arrow_function",
+  "compact_constructor_declaration",
   "constructor_declaration",
   "function",
   "function_declaration",
   "function_definition",
   "function_expression",
   "function_item",
+  "method",
   "method_declaration",
   "method_definition",
+  "rule_set",
+  "singleton_method",
 ]);
 
 const CLASS_UNIT_TYPES = new Set([
+  "class",
   "class_declaration",
   "class_definition",
   "class_specifier",
+  "enum_declaration",
   "impl_item",
+  "interface_declaration",
+  "module",
   "record_declaration",
   "struct_declaration",
   "struct_specifier",

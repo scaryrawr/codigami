@@ -3,6 +3,7 @@ import { Parser } from "web-tree-sitter";
 import {
   createDefaultLanguageParser,
   createMultiLanguageParser,
+  DEFAULT_LANGUAGE_DEFINITIONS,
 } from "../../src/scanning/multi-language-parser.ts";
 import type { LanguageParser } from "../../src/types.ts";
 
@@ -124,6 +125,62 @@ const examples: LanguageExample[] = [
       ["function_definition", "sub"],
     ],
   },
+  {
+    language: "css",
+    filePath: "styles/app.css",
+    source: [".card, .panel:hover {", "  color: red;", "  display: flex;", "}"].join("\n"),
+    expected: [["rule_set", ".card, .panel:hover"]],
+  },
+  {
+    language: "java",
+    filePath: "Calculator.java",
+    source: [
+      "public class Calculator {",
+      "  public int add(int a, int b) {",
+      "    return a + b;",
+      "  }",
+      "}",
+      "interface RunnableTask {",
+      "  void run();",
+      "}",
+      "enum Mode { FAST }",
+    ].join("\n"),
+    expected: [
+      ["class_declaration", "Calculator"],
+      ["method_declaration", "add"],
+      ["interface_declaration", "RunnableTask"],
+      ["method_declaration", "run"],
+      ["enum_declaration", "Mode"],
+    ],
+  },
+  {
+    language: "ruby",
+    filePath: "calculator.rb",
+    source: [
+      "class Calculator",
+      "  def add(a, b)",
+      "    a + b",
+      "  end",
+      "end",
+      "",
+      "def helper",
+      "  true",
+      "end",
+      "",
+      "module Formatting",
+      "  def self.title(value)",
+      "    value.to_s",
+      "  end",
+      "end",
+    ].join("\n"),
+    expected: [
+      ["class", "Calculator"],
+      ["method", "add"],
+      ["method", "helper"],
+      ["module", "Formatting"],
+      ["singleton_method", "title"],
+    ],
+  },
 ];
 
 describe("createDefaultLanguageParser", () => {
@@ -134,7 +191,7 @@ describe("createDefaultLanguageParser", () => {
     parser = await createDefaultLanguageParser();
   });
 
-  it("supports TypeScript/JavaScript plus Rust, C#, C++, C, Go, Python, and Bash extensions", () => {
+  it("supports TypeScript/JavaScript plus Rust, C#, C++, C, Go, Python, Bash, CSS, Java, and Ruby extensions", () => {
     expect(parser.extensions).toEqual(
       expect.arrayContaining([
         ".ts",
@@ -153,8 +210,44 @@ describe("createDefaultLanguageParser", () => {
         ".py",
         ".sh",
         ".bash",
+        ".css",
+        ".java",
+        ".rb",
       ]),
     );
+  });
+
+  it("keeps JavaScript and JSX on the TypeScript grammar path", () => {
+    const javascriptDefinition = DEFAULT_LANGUAGE_DEFINITIONS.find((definition) =>
+      definition.extensions.includes(".js"),
+    );
+    const jsxDefinition = DEFAULT_LANGUAGE_DEFINITIONS.find((definition) =>
+      definition.extensions.includes(".jsx"),
+    );
+
+    expect(javascriptDefinition?.language).toBe("typescript");
+    expect(javascriptDefinition?.wasmModule).toBe(
+      "tree-sitter-typescript/tree-sitter-typescript.wasm",
+    );
+    expect(jsxDefinition?.language).toBe("typescript");
+    expect(jsxDefinition?.wasmModule).toBe("tree-sitter-typescript/tree-sitter-tsx.wasm");
+  });
+
+  it("keeps default language definitions in cache-key-stable order", () => {
+    expect(DEFAULT_LANGUAGE_DEFINITIONS.map((definition) => definition.language)).toEqual([
+      "typescript",
+      "typescript",
+      "rust",
+      "csharp",
+      "cpp",
+      "c",
+      "go",
+      "python",
+      "bash",
+      "css",
+      "java",
+      "ruby",
+    ]);
   });
 
   it.each(examples)("extracts semantic units from $language", async (example) => {

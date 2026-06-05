@@ -216,6 +216,49 @@ describe("runPipeline", () => {
     expect(storedUnits.map((unit) => unit.unitType)).toEqual(["function_declaration"]);
   });
 
+  it("includes CSS and Ruby function-like units at function level by default", async () => {
+    const cssRuleUnit: CodeUnit = {
+      ...unitA,
+      id: "css-rule",
+      unitType: "rule_set",
+      name: ".card",
+      source: ".card { color: red; }",
+      language: "css",
+    };
+    const rubyMethodUnit: CodeUnit = {
+      ...unitA,
+      id: "ruby-method",
+      unitType: "method",
+      name: "normalize",
+      source: "def normalize(value)\n  value.to_s\nend",
+      language: "ruby",
+    };
+    const rubySingletonMethodUnit: CodeUnit = {
+      ...unitA,
+      id: "ruby-singleton-method",
+      unitType: "singleton_method",
+      name: "build",
+      source: "def self.build\n  new\nend",
+      language: "ruby",
+    };
+    mockParser.parse = vi.fn(async () => [cssRuleUnit, rubyMethodUnit, rubySingletonMethodUnit]);
+
+    await runPipeline({
+      files: [{ relativePath: "styles.css", absolutePath: "/abs/styles.css" }],
+      parser: mockParser,
+      embeddingProvider: mockEmbeddingProvider,
+      store: mockStore,
+      threshold: 0.8,
+      readFile: createMockFileReader(new Map([["/abs/styles.css", "source"]])),
+    });
+
+    expect(storedUnits.map((unit) => unit.unitType)).toEqual([
+      "rule_set",
+      "method",
+      "singleton_method",
+    ]);
+  });
+
   it("includes class-level units when requested", async () => {
     const classUnit: CodeUnit = {
       ...unitA,
@@ -239,6 +282,65 @@ describe("runPipeline", () => {
     expect(storedUnits.map((unit) => unit.unitType)).toEqual([
       "class_declaration",
       "function_declaration",
+    ]);
+  });
+
+  it("includes Java and Ruby class-like units when class level is requested", async () => {
+    const javaInterfaceUnit: CodeUnit = {
+      ...unitA,
+      id: "java-interface",
+      unitType: "interface_declaration",
+      name: "RunnableTask",
+      source: "interface RunnableTask { void run(); }",
+      language: "java",
+    };
+    const javaEnumUnit: CodeUnit = {
+      ...unitA,
+      id: "java-enum",
+      unitType: "enum_declaration",
+      name: "Mode",
+      source: "enum Mode { FAST }",
+      language: "java",
+    };
+    const rubyClassUnit: CodeUnit = {
+      ...unitA,
+      id: "ruby-class",
+      unitType: "class",
+      name: "Calculator",
+      source: "class Calculator\nend",
+      language: "ruby",
+    };
+    const rubyModuleUnit: CodeUnit = {
+      ...unitA,
+      id: "ruby-module",
+      unitType: "module",
+      name: "Formatting",
+      source: "module Formatting\nend",
+      language: "ruby",
+    };
+    mockParser.parse = vi.fn(async () => [
+      javaInterfaceUnit,
+      javaEnumUnit,
+      rubyClassUnit,
+      rubyModuleUnit,
+      unitA,
+    ]);
+
+    await runPipeline({
+      files: [{ relativePath: "test.java", absolutePath: "/abs/test.java" }],
+      parser: mockParser,
+      embeddingProvider: mockEmbeddingProvider,
+      store: mockStore,
+      threshold: 0.8,
+      readFile: createMockFileReader(new Map([["/abs/test.java", "source"]])),
+      comparisonLevels: ["class"],
+    });
+
+    expect(storedUnits.map((unit) => unit.unitType)).toEqual([
+      "interface_declaration",
+      "enum_declaration",
+      "class",
+      "module",
     ]);
   });
 
