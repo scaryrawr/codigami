@@ -1,27 +1,16 @@
 import { extname } from "node:path";
 import { createRequire } from "node:module";
-import { Language, type Node, Parser } from "web-tree-sitter";
+import { Language, Parser } from "web-tree-sitter";
 import { CodigamiError, type CodeUnit, type LanguageParser } from "../types.ts";
-import { extractCodeUnitsFromRootNode as extractTypescriptCodeUnits } from "./typescript-unit-extractor.ts";
-import {
-  extractCodeUnitsByRules,
-  nameFromDeclarator,
-  nameFromField,
-  nameFromFirstChild,
-  type UnitExtractionRule,
-} from "./tree-sitter-unit-extractor.ts";
+import { DEFAULT_LANGUAGE_DEFINITIONS } from "./languages/index.ts";
+import type { TreeSitterLanguageDefinition } from "./tree-sitter-language-definition.ts";
+import { extractCodeUnitsByRules } from "./tree-sitter-unit-extractor.ts";
+
+export { DEFAULT_LANGUAGE_DEFINITIONS, DEFAULT_LANGUAGE_EXTENSIONS } from "./languages/index.ts";
+export type { TreeSitterLanguageDefinition } from "./tree-sitter-language-definition.ts";
 
 const require = createRequire(import.meta.url);
 const MULTI_LANGUAGE_PARSER_CACHE_VERSION = "multi-language-parser:v2";
-
-export interface TreeSitterLanguageDefinition {
-  readonly language: string;
-  readonly extensions: readonly string[];
-  readonly wasmModule: string;
-  readonly cacheKey?: string;
-  readonly rules?: readonly UnitExtractionRule[];
-  readonly extract?: (rootNode: Node, filePath: string, language: string) => CodeUnit[];
-}
 
 interface LoadedLanguageParser {
   readonly language: string;
@@ -40,180 +29,6 @@ const defaultParserDependencies: TreeSitterParserDependencies = {
   createParser: () => new Parser(),
   resolveWasmModule: (wasmModule: string) => require.resolve(wasmModule),
 };
-
-const nameFromRustImpl = (node: Node): string | null => {
-  return (
-    node.childForFieldName("type")?.text ??
-    node.childForFieldName("trait")?.text ??
-    nameFromFirstChild("type_identifier", "scoped_type_identifier", "generic_type")(node)
-  );
-};
-
-const RUST_RULES: readonly UnitExtractionRule[] = [
-  {
-    nodeType: "function_item",
-    unitType: "function_item",
-    getName: nameFromField,
-  },
-  {
-    nodeType: "impl_item",
-    unitType: "impl_item",
-    getName: nameFromRustImpl,
-    descendIntoChildren: true,
-  },
-];
-
-const CSHARP_RULES: readonly UnitExtractionRule[] = [
-  {
-    nodeType: "class_declaration",
-    unitType: "class_declaration",
-    getName: nameFromField,
-    descendIntoChildren: true,
-  },
-  {
-    nodeType: "struct_declaration",
-    unitType: "struct_declaration",
-    getName: nameFromField,
-    descendIntoChildren: true,
-  },
-  {
-    nodeType: "record_declaration",
-    unitType: "record_declaration",
-    getName: nameFromField,
-    descendIntoChildren: true,
-  },
-  {
-    nodeType: "method_declaration",
-    unitType: "method_declaration",
-    getName: nameFromField,
-  },
-  {
-    nodeType: "constructor_declaration",
-    unitType: "constructor_declaration",
-    getName: nameFromField,
-  },
-];
-
-const C_FAMILY_FUNCTION_RULE: UnitExtractionRule = {
-  nodeType: "function_definition",
-  unitType: "function_definition",
-  getName: nameFromDeclarator,
-};
-
-const CPP_RULES: readonly UnitExtractionRule[] = [
-  C_FAMILY_FUNCTION_RULE,
-  {
-    nodeType: "class_specifier",
-    unitType: "class_specifier",
-    getName: nameFromField,
-    descendIntoChildren: true,
-  },
-  {
-    nodeType: "struct_specifier",
-    unitType: "struct_specifier",
-    getName: nameFromField,
-    descendIntoChildren: true,
-  },
-];
-
-const C_RULES: readonly UnitExtractionRule[] = [C_FAMILY_FUNCTION_RULE];
-
-const GO_RULES: readonly UnitExtractionRule[] = [
-  {
-    nodeType: "function_declaration",
-    unitType: "function_declaration",
-    getName: nameFromField,
-  },
-  {
-    nodeType: "method_declaration",
-    unitType: "method_declaration",
-    getName: nameFromField,
-  },
-];
-
-const PYTHON_RULES: readonly UnitExtractionRule[] = [
-  {
-    nodeType: "function_definition",
-    unitType: "function_definition",
-    getName: nameFromField,
-  },
-  {
-    nodeType: "class_definition",
-    unitType: "class_definition",
-    getName: nameFromField,
-    descendIntoChildren: true,
-  },
-];
-
-const BASH_RULES: readonly UnitExtractionRule[] = [
-  {
-    nodeType: "function_definition",
-    unitType: "function_definition",
-    getName: nameFromFirstChild("word"),
-    descendIntoChildren: true,
-  },
-];
-
-export const DEFAULT_LANGUAGE_DEFINITIONS: readonly TreeSitterLanguageDefinition[] = [
-  {
-    language: "typescript",
-    extensions: [".ts", ".js"],
-    wasmModule: "tree-sitter-typescript/tree-sitter-typescript.wasm",
-    extract: extractTypescriptCodeUnits,
-  },
-  {
-    language: "typescript",
-    extensions: [".tsx", ".jsx"],
-    wasmModule: "tree-sitter-typescript/tree-sitter-tsx.wasm",
-    extract: extractTypescriptCodeUnits,
-  },
-  {
-    language: "rust",
-    extensions: [".rs"],
-    wasmModule: "tree-sitter-rust/tree-sitter-rust.wasm",
-    rules: RUST_RULES,
-  },
-  {
-    language: "csharp",
-    extensions: [".cs"],
-    wasmModule: "tree-sitter-c-sharp/tree-sitter-c_sharp.wasm",
-    rules: CSHARP_RULES,
-  },
-  {
-    language: "cpp",
-    extensions: [".cpp", ".cc", ".cxx", ".c++", ".hpp", ".hh", ".hxx", ".h++", ".h"],
-    wasmModule: "tree-sitter-cpp/tree-sitter-cpp.wasm",
-    rules: CPP_RULES,
-  },
-  {
-    language: "c",
-    extensions: [".c"],
-    wasmModule: "tree-sitter-c/tree-sitter-c.wasm",
-    rules: C_RULES,
-  },
-  {
-    language: "go",
-    extensions: [".go"],
-    wasmModule: "tree-sitter-go/tree-sitter-go.wasm",
-    rules: GO_RULES,
-  },
-  {
-    language: "python",
-    extensions: [".py"],
-    wasmModule: "tree-sitter-python/tree-sitter-python.wasm",
-    rules: PYTHON_RULES,
-  },
-  {
-    language: "bash",
-    extensions: [".sh", ".bash"],
-    wasmModule: "tree-sitter-bash/tree-sitter-bash.wasm",
-    rules: BASH_RULES,
-  },
-];
-
-export const DEFAULT_LANGUAGE_EXTENSIONS: readonly string[] = Array.from(
-  new Set(DEFAULT_LANGUAGE_DEFINITIONS.flatMap((definition) => definition.extensions)),
-);
 
 const createLanguageParserCacheKey = (
   definitions: readonly TreeSitterLanguageDefinition[],
